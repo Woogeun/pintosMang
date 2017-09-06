@@ -1,0 +1,14 @@
+===========================Project0==============================
+	0. Team name: 36
+	1. Team member: 20130299 Woogeun Bae, 20130088 Bumki Kim
+	2. Project number: 0
+	3. # of tokens used: 0
+	4. Screenshot: "screenshot.png" is in the pintos/src directory
+	5. new files
+		pintos/src/tests/threads/hello.c: In file hello.c, just print hello, world!\n as function named test_hello.
+		pintos/src/tests/threads/hello.ck: hello.ck determines what case is successful pass case or not.
+
+		modified files
+		pintos/src/tests/threads/Make.tests: Added test names as "hello", and added hello.c files in test sources.
+		pintos/src/tests/threads/tests.c: In test structure, {"hello", test_hello} element is added.
+		pintos/src/tests/threads/tests.h: Define the test_hello variables.
