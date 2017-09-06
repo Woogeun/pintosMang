@@ -30,7 +30,7 @@
 00000000000i[     ]   SB16 support: no
 00000000000i[     ]   USB support: no
 00000000000i[     ]   VGA extension support:  
-00000000000i[MEM0 ] allocated memory at 0x7f2680a3d010. after alignment, vector=0x7f2680a3e000
+00000000000i[MEM0 ] allocated memory at 0x7f4bd1053010. after alignment, vector=0x7f4bd1054000
 00000000000i[MEM0 ] 4.00MB
 00000000000i[MEM0 ] rom at 0xf0000/65536 ('/usr/local/share/bochs/BIOS-bochs-latest')
 00000000000i[MEM0 ] rom at 0xc0000/32768 ('/usr/local/share/bochs/VGABIOS-lgpl-latest')
@@ -46,7 +46,7 @@
 00000000000i[     ] init_mem of 'extfpuirq' plugin device by virtual method
 00000000000i[     ] init_mem of 'speaker' plugin device by virtual method
 00000000000i[     ] init_dev of 'harddrv' plugin device by virtual method
-00000000000i[HD   ] HD on ata0-0: '/tmp/33xoKnp4G9.dsk' 'flat' mode 
+00000000000i[HD   ] HD on ata0-0: '/tmp/Qtqsg7jql8.dsk' 'flat' mode 
 00000000000i[HD   ] Using boot sequence disk, none, none
 00000000000i[HD   ] Floppy boot signature check is enabled
 00000000000i[     ] init_dev of 'keyboard' plugin device by virtual method
@@ -73,27 +73,27 @@
 00000786523e[HD   ] ata0: device set to 1 which does not exist
 00000786815e[HD   ] ata1: device set to 0 which does not exist
 00000787108e[HD   ] ata1: device set to 1 which does not exist
-00001711286p[UNMP ] >>PANIC<< Shutdown port: shutdown requested
-00001711286i[SYS  ] Last time is 1
-00001711286i[NGUI ] bx_nogui_gui_c::exit() not implemented yet.
-00001711286i[CPU  ] protected mode
-00001711286i[CPU  ] CS.d_b = 32 bit
-00001711286i[CPU  ] SS.d_b = 32 bit
-00001711286i[CPU  ] | EAX=0000006e  EBX=c010b974  ECX=c002ff86  EDX=ffff8900
-00001711286i[CPU  ] | ESP=c002ff70  EBP=c002ff88  ESI=00000000  EDI=c010cd2d
-00001711286i[CPU  ] | IOPL=0 id vip vif ac vm rf nt of df IF tf sf zf af pf cf
-00001711286i[CPU  ] | SEG selector     base    limit G D
-00001711286i[CPU  ] | SEG sltr(index|ti|rpl)     base    limit G D
-00001711286i[CPU  ] |  CS:0008( 0001| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] |  DS:0010( 0002| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] |  SS:0010( 0002| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] |  ES:0010( 0002| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] |  FS:0010( 0002| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] |  GS:0010( 0002| 0|  0) 00000000 000fffff 1 1
-00001711286i[CPU  ] | EIP=c0100067 (c0100066)
-00001711286i[CPU  ] | CR0=0x80010015 CR1=0 CR2=0x00000000
-00001711286i[CPU  ] | CR3=0x00112000 CR4=0x00000000
-00001711286i[CPU  ] >> ee
-00001711286i[CPU  ] >> : out dx, al
-00001711286i[     ] restoring default signal behavior
-00001711286i[CTRL ] quit_sim called with exit code 1
+00001833244p[UNMP ] >>PANIC<< Shutdown port: shutdown requested
+00001833244i[SYS  ] Last time is 1
+00001833244i[NGUI ] bx_nogui_gui_c::exit() not implemented yet.
+00001833244i[CPU  ] protected mode
+00001833244i[CPU  ] CS.d_b = 32 bit
+00001833244i[CPU  ] SS.d_b = 32 bit
+00001833244i[CPU  ] | EAX=0000006e  EBX=0000003d  ECX=c002fef6  EDX=ffff8900
+00001833244i[CPU  ] | ESP=c002fee0  EBP=c002fef8  ESI=c010c340  EDI=c010da1d
+00001833244i[CPU  ] | IOPL=0 id vip vif ac vm rf nt of df if tf sf zf af pf cf
+00001833244i[CPU  ] | SEG selector     base    limit G D
+00001833244i[CPU  ] | SEG sltr(index|ti|rpl)     base    limit G D
+00001833244i[CPU  ] |  CS:0008( 0001| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] |  DS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] |  SS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] |  ES:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] |  FS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] |  GS:0010( 0002| 0|  0) 00000000 000fffff 1 1
+00001833244i[CPU  ] | EIP=c0100067 (c0100066)
+00001833244i[CPU  ] | CR0=0x80010015 CR1=0 CR2=0x00000000
+00001833244i[CPU  ] | CR3=0x00112000 CR4=0x00000000
+00001833244i[CPU  ] >> ee
+00001833244i[CPU  ] >> : out dx, al
+00001833244i[     ] restoring default signal behavior
+00001833244i[CTRL ] quit_sim called with exit code 1

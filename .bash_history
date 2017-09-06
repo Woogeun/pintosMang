@@ -307,3 +307,137 @@ cd pintos/src/tests/
 vi Make.tests 
 ls
 logout
+ls
+cd pintos/
+ls
+cdsr
+cd src/
+ls
+cd threads/
+make check
+pintos -q run hello
+cd build
+pintos -q run hello
+cd ..
+ls
+export
+cd ..
+cd utils
+make clean
+ls
+make
+pintos -q run hello
+make
+pintos -q run hello
+pintos run hello
+cd ../
+ls
+make
+cd threads/
+make
+make clean
+make
+pintos run hello
+pintos run alarm-multiple
+make
+cd ..
+cd threads
+cd build
+ls
+make
+make check
+ls
+cd pintos/
+make
+pintos run hello
+export
+cd src/threads/
+pintos run hello
+cd ../
+ls
+cd tests/
+ls
+cd ../utils/
+pintos run hello
+cd ../
+ls
+cd threads/
+make
+make grade
+pintos run alarm-multiple
+export
+make clean
+make
+pintos -v -- -q run alarm-multiple
+pintos run alarm-multiple
+pintos -q alarm-multiple
+pintos -v -- -q run alarm-multiple
+pintos -v -- -q run hello
+vi ../tests/threads/hello.ck 
+pintos -v -- -q run hello
+vi ../tests/threads/hello.ck 
+pintos -v -- -q run hello
+git
+ls
+cd ../../
+ls
+cd ../
+ls
+vi .gitignore
+git init
+git add pintos
+git status
+git add .
+git status
+git commit -m 'first commit'
+git config --global user.email "orange8fume@gmail.com"
+git config --global user.name 
+git config --global user.name "Woogeun"
+git commit -m 'first commit'
+git remote add origin git@github.com:Woogeun/OS2017_Fall.git
+git push origin master
+git remote -v
+git remove origin
+git remote -rm origin
+git remote remove origin
+git remote -v
+git remote https://github.com/Woogeun/OS2017_Fall.git
+git remote add origin https://github.com/Woogeun/OS2017_Fall.git
+git push -u origin master
+git remote remove origin
+git remote add origin git@github.com:Woogeun/OS2017_Fall.git
+git push -u origin master
+ls
+cd pintos/
+ls
+cd
+ls
+pintos
+pintos run hello
+pintos -v -- -q run hello
+logout
+ls
+git remote
+git remote -v
+ssh-keygen
+ls
+ls -al
+cat .ssh/id_rsa.pub 
+git push origin master
+logout
+passwd
+logout
+ls
+cd pintos/
+ls
+pintos run 
+cd pi
+cd src/
+ls
+pintos run -v -- -q run hello
+cd threads/
+ls
+pintos run -v -- -q run hello
+pintos run -v -- -q run hellosa
+pintos run -v -- -q run hellosasdf
+logout
