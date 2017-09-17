@@ -138,12 +138,15 @@ thread_tick (void)
 {
   struct thread *t = thread_current ();
 
-  struct thread *tmp = list_entry(list_front(&waiting_list),struct thread, elem);
-
-  if( tmp->sleep_end_ticks <= timer_ticks() ){
-    list_pop_front(&waiting_list);
-    list_push_back(&ready_list, &tmp->elem);
+  if(!list_empty(&waiting_list)){
+    struct thread *tmp = list_entry(list_front(&waiting_list),struct thread, elem);
+    if( tmp->sleep_end_ticks <= timer_ticks() ){
+      list_pop_front(&waiting_list);
+      list_push_back(&ready_list, &tmp->elem);
+    }
   }
+
+  
 
   /* Update statistics. */
   if (t == idle_thread)
