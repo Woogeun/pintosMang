@@ -28,6 +28,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list waiting_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -214,6 +216,7 @@ thread_block (void)
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
+  list_push_back(&waiting_list, thread_current()->elem);
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
