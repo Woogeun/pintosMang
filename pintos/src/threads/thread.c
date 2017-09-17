@@ -214,6 +214,7 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+  struct thread *curr = thread_current ();
   enum intr_level old_level;
 
   ASSERT (!intr_context ());
@@ -221,8 +222,8 @@ thread_block (void)
   old_level = intr_disable ();
   ASSERT (intr_get_level () == INTR_OFF);
   if (curr != idle_thread)
-    list_push_back(&waiting_list, &thread_current()->elem);
-  thread_current ()->status = THREAD_BLOCKED;
+    list_push_back(&waiting_list, &curr->elem);
+  curr->status = THREAD_BLOCKED;
   schedule ();
   intr_set_level (old_level);
 }
