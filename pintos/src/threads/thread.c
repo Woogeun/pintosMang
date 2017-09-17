@@ -30,7 +30,7 @@ static struct list ready_list;
 
 static struct list waiting_list;
 
-list_less_func
+bool
 cmp_timeticks (const struct list_elem *a,
                   const struct list_elem *b,
                                    void *aux){
