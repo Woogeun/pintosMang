@@ -1,1 +1,8 @@
 *.tar*
+.bash*
+.vim*
+.profile
+.DS_Store
+.ssh
+.gitconfig
+.idea
