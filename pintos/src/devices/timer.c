@@ -96,15 +96,16 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-
+  struct thread *curr = thread_current();
   int64_t start = timer_ticks ();
   ASSERT (intr_get_level () == INTR_ON);
   /*
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
   */
-  thread_current()->sleep_start_ticks = start;
-  thread_current()->sleep_ticks = ticks;
+  curr->sleep_start_ticks = start;
+  curr->sleep_ticks = ticks;
+  curr->sleep_end_ticks = start + ticks;
   thread_block();
 }
 
