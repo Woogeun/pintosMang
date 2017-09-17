@@ -140,7 +140,7 @@ thread_tick (void)
 
   struct thread *tmp = list_entry(list_pop_front(&waiting_list), struct thread, elem);
   if(tmp->sleep_end_ticks >= timer_ticks()){
-    list_push_back(&ready_list, tmp->elem);
+    list_push_back(&ready_list, &tmp->elem);
   }
 
   /* Update statistics. */
