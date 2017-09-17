@@ -103,6 +103,8 @@ timer_sleep (int64_t ticks)
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
   */
+  thread_current()->sleep_start_ticks = start;
+  thread_current()->sleep_ticks = ticks;
   thread_block();
 }
 
