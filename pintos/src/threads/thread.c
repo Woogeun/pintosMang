@@ -30,6 +30,18 @@ static struct list ready_list;
 
 static struct list waiting_list;
 
+list_less_func
+cmp_timeticks (const struct list_elem *a,
+                  const struct list_elem *b,
+                                   void *aux){
+  struct thread *cmp1 = list_entry(a,struct thread,elem);
+  struct thread *cmp2 = list_entry(b,struct thread,elem);
+  if (cmp1->sleep_end_ticks < cmp2->sleep_end_ticks){
+    return true;
+  }
+  return false;
+}
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -125,6 +137,11 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+
+  struct thread *tmp = list_entry(list_pop_front(&waiting_list), struct thread, elem);
+  if(tmp->sleep_end_ticks >= timer_ticks()){
+    list_push_back(&ready_list, tmp->elem);
+  }
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -222,7 +239,8 @@ thread_block (void)
   old_level = intr_disable ();
   ASSERT (intr_get_level () == INTR_OFF);
   if (curr != idle_thread)
-    list_push_back(&waiting_list, &curr->elem);
+//    list_push_back(&waiting_list, &curr->elem);
+    list_insert_ordered(&waiting_list,&curr->elem,cmp_timeticks,NULL);
   curr->status = THREAD_BLOCKED;
   schedule ();
   intr_set_level (old_level);
