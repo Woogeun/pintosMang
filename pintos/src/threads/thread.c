@@ -214,12 +214,17 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  ASSERT (!intr_context ());
-  ASSERT (intr_get_level () == INTR_OFF);
+  enum intr_level old_level;
 
-  list_push_back(&waiting_list, &thread_current()->elem);
+  ASSERT (!intr_context ());
+
+  old_level = intr_disable ();
+  ASSERT (intr_get_level () == INTR_OFF);
+  if (curr != idle_thread)
+    list_push_back(&waiting_list, &thread_current()->elem);
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
+  intr_set_level (old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
