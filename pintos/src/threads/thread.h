@@ -92,6 +92,10 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    int64_t sleep_start_ticks;
+    int64_t sleep_ticks;
+    int64_t sleep_end_ticks;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -132,5 +136,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
 
 #endif /* threads/thread.h */
