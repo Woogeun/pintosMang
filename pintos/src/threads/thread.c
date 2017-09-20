@@ -42,6 +42,18 @@ cmp_timeticks (const struct list_elem *a,
   return false;
 }
 
+bool
+cmp_priority (const struct list_elem *a,
+                  const struct list_elem *b,
+                                   void *aux){
+  struct thread *cmp1 = list_entry(a,struct thread,elem);
+  struct thread *cmp2 = list_entry(b,struct thread,elem);
+  if (cmp1->priority_eff < cmp2->priority_eff){
+    return true;
+  }
+  return false;
+}
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -348,6 +360,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_current ()->priority_eff = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -355,6 +368,18 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+void
+thread_set_priority_eff (int new_priority) 
+{
+  thread_current ()->priority_eff = new_priority;
+}
+
+int
+thread_get_priority_eff (void)
+{
+  return thread_current ()->priority_eff;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -472,6 +497,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
 }
 
@@ -500,6 +526,7 @@ next_thread_to_run (void)
     return idle_thread;
   else
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    //return list_entry(list_max(&ready_list,&cmp_priority,NULL), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
