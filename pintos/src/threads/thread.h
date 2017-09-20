@@ -88,6 +88,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int priority_original;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -138,5 +139,6 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
+bool cmp_priority(const struct list_elem*, const struct list_elem*, void *);
 
 #endif /* threads/thread.h */
