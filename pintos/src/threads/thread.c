@@ -258,7 +258,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
   if (curr != idle_thread)
 //    list_push_back(&waiting_list, &curr->elem);
-    list_insert_ordered(&waiting_list,&curr->elem,cmp_timeticks,NULL);
+    list_insert_ordered(&waiting_list,&curr->elem,&cmp_timeticks,NULL);
   curr->status = THREAD_BLOCKED;
   schedule ();
   intr_set_level (old_level);
@@ -519,7 +519,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_max (&ready_list, cmp_priority, NULL), struct thread, elem);
+    return list_entry (list_max (&ready_list, &cmp_priority, NULL), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
