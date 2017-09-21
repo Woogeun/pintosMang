@@ -28,32 +28,6 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-static struct list waiting_list;
-
-bool
-cmp_timeticks (const struct list_elem *a,
-                  const struct list_elem *b,
-                                   void *aux){
-  struct thread *cmp1 = list_entry(a,struct thread,elem);
-  struct thread *cmp2 = list_entry(b,struct thread,elem);
-  if (cmp1->sleep_end_ticks < cmp2->sleep_end_ticks){
-    return true;
-  }
-  return false;
-}
-
-bool
-cmp_priority (const struct list_elem *a,
-                  const struct list_elem *b,
-                                   void *aux){
-  struct thread *cmp1 = list_entry(a,struct thread,elem);
-  struct thread *cmp2 = list_entry(b,struct thread,elem);
-  if (cmp1->priority_eff < cmp2->priority_eff){
-    return true;
-  }
-  return false;
-}
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -117,7 +91,6 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init (&waiting_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -149,16 +122,6 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-
-  if(!list_empty(&waiting_list)){
-    struct thread *tmp = list_entry(list_front(&waiting_list),struct thread, elem);
-    if( tmp->sleep_end_ticks <= timer_ticks() ){
-      list_pop_front(&waiting_list);
-      list_push_back(&ready_list, &tmp->elem);
-    }
-  }
-
-  
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -248,19 +211,11 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  struct thread *curr = thread_current ();
-  enum intr_level old_level;
-
   ASSERT (!intr_context ());
-
-  old_level = intr_disable ();
   ASSERT (intr_get_level () == INTR_OFF);
-  if (curr != idle_thread)
-//    list_push_back(&waiting_list, &curr->elem);
-    list_insert_ordered(&waiting_list,&curr->elem,&cmp_timeticks,NULL);
-  curr->status = THREAD_BLOCKED;
+
+  thread_current ()->status = THREAD_BLOCKED;
   schedule ();
-  intr_set_level (old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -360,7 +315,6 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  thread_current ()->priority_eff = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -368,18 +322,6 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
-}
-
-void
-thread_set_priority_eff (int new_priority) 
-{
-  thread_current ()->priority_eff = new_priority;
-}
-
-int
-thread_get_priority_eff (void)
-{
-  return thread_current ()->priority_eff;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -497,7 +439,6 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
 }
 
@@ -526,7 +467,6 @@ next_thread_to_run (void)
     return idle_thread;
   else
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    //return list_entry(list_max(&ready_list,&cmp_priority,NULL), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
