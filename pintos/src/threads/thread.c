@@ -48,12 +48,11 @@ cmp_priority (const struct list_elem *a,
                                    void *aux){
   struct thread *cmp1 = list_entry(a,struct thread,elem);
   struct thread *cmp2 = list_entry(b,struct thread,elem);
-  if (cmp1->priority < cmp2->priority){
+  if (cmp1->priority_eff < cmp2->priority_eff){
     return true;
   }
   return false;
 }
-
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -258,7 +257,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
   if (curr != idle_thread)
 //    list_push_back(&waiting_list, &curr->elem);
-    list_insert_ordered(&waiting_list,&curr->elem,cmp_timeticks,NULL);
+    list_insert_ordered(&waiting_list,&curr->elem,&cmp_timeticks,NULL);
   curr->status = THREAD_BLOCKED;
   schedule ();
   intr_set_level (old_level);
@@ -361,6 +360,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_current ()->priority_eff = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -370,10 +370,16 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
-int
-thread_get_priority_original (void)
+void
+thread_set_priority_eff (int new_priority) 
 {
-  return thread_current ()->priority_original;
+  thread_current ()->priority_eff = new_priority;
+}
+
+int
+thread_get_priority_eff (void)
+{
+  return thread_current ()->priority_eff;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -491,7 +497,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->priority_original = priority;
+  t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
 }
 
@@ -519,7 +525,8 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_max (&ready_list, cmp_priority, NULL), struct thread, elem);
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    //return list_entry(list_max(&ready_list,&cmp_priority,NULL), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
