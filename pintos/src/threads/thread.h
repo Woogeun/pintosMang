@@ -140,5 +140,6 @@ int thread_get_load_avg (void);
 
 bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
 bool cmp_priority(const struct list_elem*, const struct list_elem*, void *);
+>>>>>>> d7b9b3fc7111e11e78671947174b83636f95cc79
 
 #endif /* threads/thread.h */
