@@ -16,5 +16,8 @@ case $1 in
       $pintos $alarm
     done
     break;;
+  "alarm-multiple")
+    $pintos alarm-multiple
+    break;;
     
 esac
