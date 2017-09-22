@@ -144,4 +144,6 @@ int thread_get_load_avg (void);
 bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
 bool cmp_priority(const struct list_elem*, const struct list_elem*, void *);
 void print_waiting_list(const struct list*);
+static struct list waiting_list;
+static struct thread *idle_thread;
 #endif /* threads/thread.h */

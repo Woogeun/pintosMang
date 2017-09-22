@@ -109,8 +109,6 @@ timer_sleep (int64_t ticks)
   old_level = intr_disable();
 
 
-  struct thread *curr = thread_current();
-
   list_less_func *cmp;
   cmp = &cmp_timeticks;
 
