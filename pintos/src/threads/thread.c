@@ -27,10 +27,70 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list waiting_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
 
+void print_list(const struct list *list) {
+  //enum intr_level old_level;
+  ASSERT(list != NULL);
+  
+  //old_level = intr_disable();
+  struct list_elem *element;
+  struct thread *tmp;
+  if (list_empty(list)) return;
+  element = list_front(list);
+  tmp = list_entry(element, struct thread, elem);
+
+  printf("===========================begin of the list, %d\n", list_size(&waiting_list));
+  while (element != NULL) {
+    tmp = list_entry(element, struct thread, elem);
+    printf("thread | name: %10s, priority: %2d, sleep_end_ticks: %5d, status: %d\n", 
+        tmp->name, tmp->priority, tmp->sleep_end_ticks, tmp->status);
+    element = element->next;
+  }
+  printf("===========================end of the list\n");
+  //intr_set_level(old_level);
+}
+
+bool cmp_timeticks(
+    const struct list_elem  *a,
+    const struct list_elem *b,
+    void *aux) {
+  struct thread *cmp1 = list_entry(a, struct thread, elem);
+  struct thread *cmp2 = list_entry(b, struct thread, elem);
+  /*
+  if (cmp1->sleep_end_ticks <= cmp2->sleep_end_ticks){
+    if (cmp1->sleep_end_ticks == cmp2->sleep_end_ticks){
+      if(cmp1->priority_eff > cmp2->priority_eff){
+        return true;
+      }
+      else{
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+  */
+  if (cmp1->sleep_end_ticks < cmp2->sleep_end_ticks) {
+    return true;
+  }
+  return false;
+}
+
+bool cmp_priority(
+    const struct list_elem *a,
+    const struct list_elem *b,
+    void *aux) {
+  struct thread *cmp1 = list_entry(a, struct thread, elem);
+  struct thread *cmp2 = list_entry(b, struct thread, elem);
+  if (cmp1->priority_eff < cmp2->priority_eff) {
+    return true;
+  } 
+  return false;
+}
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
@@ -91,6 +151,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&waiting_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -122,6 +183,23 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+
+  if (!list_empty(&waiting_list)) {
+    struct thread *tmp = list_entry(list_front(&waiting_list), struct thread, elem);
+    while (tmp->sleep_end_ticks <= timer_ticks()) {
+      //print_list(&waiting_list);
+      //printf("before list size: %d", list_size(&waiting_list));
+      list_pop_front(&waiting_list);
+      //print_list(&waiting_list);
+      //printf("   after list size:%d\n", list_size(&waiting_list));
+      thread_unblock(tmp);
+      if (list_empty(&waiting_list)) {
+        break;
+      }
+      tmp = list_entry(list_front(&waiting_list), struct thread, elem);
+    }
+  }
+
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -211,11 +289,24 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  ASSERT (!intr_context ());
-  ASSERT (intr_get_level () == INTR_OFF);
+  //printf("blocked!!\n");
+  //print_list(&waiting_list);
+  struct thread *curr = thread_current();
+  enum intr_level old_level;
+  ASSERT (!intr_context());
+  old_level = intr_disable();
 
-  thread_current ()->status = THREAD_BLOCKED;
+  ASSERT (intr_get_level () == INTR_OFF);
+  list_less_func *cmp;
+  cmp=&cmp_timeticks;
+
+  if (curr != idle_thread) {
+    list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
+    //curr->status = THREAD_BLOCKED;
+  }
+  curr->status = THREAD_BLOCKED;
   schedule ();
+  intr_set_level(old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -233,6 +324,7 @@ thread_unblock (struct thread *t)
 
   ASSERT (is_thread (t));
 
+  //printf("unblocked::::::::name: %s, status: %d\n", t->name, t->status);
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
@@ -439,6 +531,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
 }
 
@@ -535,7 +628,8 @@ schedule (void)
 
   if (curr != next)
     prev = switch_threads (curr, next);
-  schedule_tail (prev); 
+  schedule_tail (prev);
+  //print_list(&ready_list);
 }
 
 /* Returns a tid to use for a new thread. */

@@ -8,8 +8,13 @@ alarm=("alarm-single" "alarm-multiple" "alarm-zero" "alarm-negative" "alarm-simu
 
 
 case $1 in
-  "hello")
-    $pintos hello
+  "clean")
+    make clean
+    break;;
+  "check")
+    cd ./build
+    make check
+    make grade
     break;;
   "alarm")
     for alarm in "${alarm[@]}"; do
@@ -18,7 +23,8 @@ case $1 in
     done
     break;;
   *)
-    echo "$pintos $1"
-    $pintos $1;;
+    test="alarm-"$1
+    echo "$pintos $test"
+    $pintos $test;;
     
 esac
