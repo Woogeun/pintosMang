@@ -421,6 +421,20 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+void
+thread_set_priority_eff (int new_priority) 
+{
+  thread_current ()->priority_eff = new_priority;
+}
+
+/* Returns the current thread's priority. */
+int
+thread_get_priority_eff (void) 
+{
+  return thread_current ()->priority_eff;
+}
+
+
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
@@ -563,6 +577,11 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list)){
     return idle_thread;
+<<<<<<< HEAD
+  else
+    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return list_entry(list_max(&ready_list,&cmp_priority,NULL), struct thread, elem);
+=======
   }
   else {
     list_less_func *cmp;
@@ -571,6 +590,7 @@ next_thread_to_run (void)
     list_remove(t);
     return list_entry(t, struct thread, elem);
   }
+>>>>>>> 9e01ffc1f1aedbf2af11f06eb209da82468a5bbf
 }
 
 /* Completes a thread switch by activating the new thread's page

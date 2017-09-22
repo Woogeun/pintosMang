@@ -133,6 +133,9 @@ void thread_yield (void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+int thread_get_priroity_eff (void);
+void thread_set_priority_eff (int);
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);

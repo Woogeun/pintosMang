@@ -47,6 +47,7 @@ sema_init (struct semaphore *sema, unsigned value)
   ASSERT (sema != NULL);
 
   sema->value = value;
+  sema->lock_holder = NULL:
   list_init (&sema->waiters);
 }
 
@@ -199,6 +200,7 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  lock->semaphore->lock_holder = thread_current();
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -218,6 +220,7 @@ lock_try_acquire (struct lock *lock)
   success = sema_try_down (&lock->semaphore);
   if (success)
     lock->holder = thread_current ();
+    lock->semaphore->lock_holder = thread_current ();
   return success;
 }
 
@@ -234,7 +237,7 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  sema_up (&lock->semaphore); //handle lock_holder 
 }
 
 /* Returns true if the current thread holds LOCK, false
