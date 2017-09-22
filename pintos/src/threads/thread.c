@@ -287,18 +287,29 @@ thread_create (const char *name, int priority,
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
 void
-thread_block (void) 
+thread_block () 
 {
   //printf("blocked!!\n");
   //print_list(&waiting_list);
   
-  
+  if
   
   //struct thread *curr = thread_current();
   //enum intr_level old_level;
   ASSERT (!intr_context());
   ASSERT (intr_get_level() == INTR_OFF);
   //old_level = intr_disable();
+  struct thread *curr = thread_current();
+
+  if(curr->sleep_ticks!=INT64_MAX){
+    list_less_func *cmp;
+    cmp = &cmp_timeticks;
+    
+    if (curr != idle_thread) {
+      list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
+    }
+  }
+
   thread_current()->status = THREAD_BLOCKED;
   schedule ();
   //intr_set_level(old_level);
@@ -322,6 +333,11 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   //print_thread(t);
   ASSERT (t->status == THREAD_BLOCKED);
+  
+  t->sleep_start_ticks = INT64_MAX;
+  t->sleep_ticks = 0;
+  t->sleep_end_ticks = INT64_MAX;
+
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
