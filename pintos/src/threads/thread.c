@@ -299,16 +299,6 @@ thread_block (void)
   ASSERT (!intr_context());
   ASSERT (intr_get_level() == INTR_OFF);
   //old_level = intr_disable();
-  struct thread *curr = thread_current();
-
-  //print_list(&waiting_list);
-
-  list_less_func *cmp;
-  cmp = &cmp_timeticks;
-
-  if (curr != idle_thread) {
-    list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
-  }
   curr->status = THREAD_BLOCKED;
   schedule ();
   //intr_set_level(old_level);

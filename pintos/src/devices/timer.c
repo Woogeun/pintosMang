@@ -107,6 +107,17 @@ timer_sleep (int64_t ticks)
   
   enum intr_level old_level;
   old_level = intr_disable();
+
+
+  struct thread *curr = thread_current();
+
+  list_less_func *cmp;
+  cmp = &cmp_timeticks;
+
+  if (curr != idle_thread) {
+    list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
+  }
+
   thread_block();
   intr_set_level (old_level);
   /*
