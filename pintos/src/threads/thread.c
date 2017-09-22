@@ -299,7 +299,7 @@ thread_block (void)
   ASSERT (!intr_context());
   ASSERT (intr_get_level() == INTR_OFF);
   //old_level = intr_disable();
-  curr->status = THREAD_BLOCKED;
+  thread_current()->status = THREAD_BLOCKED;
   schedule ();
   //intr_set_level(old_level);
 }
