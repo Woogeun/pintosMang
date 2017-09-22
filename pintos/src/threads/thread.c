@@ -304,11 +304,8 @@ thread_block (void)
 
   //print_list(&waiting_list);
 
-  list_less_func *cmp;
-  cmp = &cmp_timeticks;
-
   if (curr != idle_thread) {
-    list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
+    list_insert_ordered(&waiting_list, &curr->elem, &cmp_timeticks, NULL);
   }
   curr->status = THREAD_BLOCKED;
   schedule ();
@@ -583,9 +580,7 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    list_less_func *cmp;
-    cmp = &cmp_priority;
-    struct list_elem *t = list_max(&ready_list, cmp, NULL);
+    struct list_elem *t = list_max(&ready_list, &cmp_priority, NULL);
     list_remove(t);
     return list_entry(t, struct thread, elem);
   }
