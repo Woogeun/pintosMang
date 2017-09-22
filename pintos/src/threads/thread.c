@@ -552,6 +552,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
+  t->sleep_start_ticks = INT64_MAX;
+  t->sleep_ticks = 0;
+  t->sleep_end_ticks = INT64_MAX;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
