@@ -47,7 +47,7 @@ sema_init (struct semaphore *sema, unsigned value)
   ASSERT (sema != NULL);
 
   sema->value = value;
-  sema->lock_holder = NULL:
+  sema->lock_holder = NULL;
   list_init (&sema->waiters);
 }
 
