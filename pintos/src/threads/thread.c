@@ -32,6 +32,10 @@ static struct list waiting_list;
 /* Idle thread. */
 static struct thread *idle_thread;
 
+void print_thread(const struct thread *thread) {
+  printf("thread | name: %12s, priority: %3d, status: %d, sleep_end_ticks: %5d\n", thread->name, thread->priority, thread->status, thread->sleep_end_ticks);
+}
+
 void print_list(const struct list *list) {
   //enum intr_level old_level;
   ASSERT(list != NULL);
@@ -43,11 +47,10 @@ void print_list(const struct list *list) {
   element = list_front(list);
   tmp = list_entry(element, struct thread, elem);
 
-  printf("===========================begin of the list, %d\n", list_size(&waiting_list));
-  while (element != NULL) {
+  printf("===========================begin of the list, %d\n", list_size(&list));
+  while (element != list_end(&list)) {
     tmp = list_entry(element, struct thread, elem);
-    printf("thread | name: %10s, priority: %2d, sleep_end_ticks: %5d, status: %d\n", 
-        tmp->name, tmp->priority, tmp->sleep_end_ticks, tmp->status);
+    print_thread(tmp);
     element = element->next;
   }
   printf("===========================end of the list\n");
@@ -187,11 +190,8 @@ thread_tick (void)
   if (!list_empty(&waiting_list)) {
     struct thread *tmp = list_entry(list_front(&waiting_list), struct thread, elem);
     while (tmp->sleep_end_ticks <= timer_ticks()) {
-      //print_list(&waiting_list);
-      //printf("before list size: %d", list_size(&waiting_list));
       list_pop_front(&waiting_list);
-      //print_list(&waiting_list);
-      //printf("   after list size:%d\n", list_size(&waiting_list));
+      ASSERT(tmp->status == THREAD_BLOCKED && true);
       thread_unblock(tmp);
       if (list_empty(&waiting_list)) {
         break;
@@ -275,8 +275,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
 
   /* Add to run queue. */
+  //printf("i will create thread\n");
   thread_unblock (t);
-
   return tid;
 }
 
@@ -291,22 +291,27 @@ thread_block (void)
 {
   //printf("blocked!!\n");
   //print_list(&waiting_list);
-  struct thread *curr = thread_current();
-  enum intr_level old_level;
+  
+  
+  
+  //struct thread *curr = thread_current();
+  //enum intr_level old_level;
   ASSERT (!intr_context());
-  old_level = intr_disable();
+  ASSERT (intr_get_level() == INTR_OFF);
+  //old_level = intr_disable();
+  struct thread *curr = thread_current();
 
-  ASSERT (intr_get_level () == INTR_OFF);
+  //print_list(&waiting_list);
+
   list_less_func *cmp;
-  cmp=&cmp_timeticks;
+  cmp = &cmp_timeticks;
 
   if (curr != idle_thread) {
     list_insert_ordered(&waiting_list, &curr->elem, cmp, NULL);
-    //curr->status = THREAD_BLOCKED;
   }
   curr->status = THREAD_BLOCKED;
   schedule ();
-  intr_set_level(old_level);
+  //intr_set_level(old_level);
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -324,8 +329,8 @@ thread_unblock (struct thread *t)
 
   ASSERT (is_thread (t));
 
-  //printf("unblocked::::::::name: %s, status: %d\n", t->name, t->status);
   old_level = intr_disable ();
+  print_thread(t);
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
@@ -556,10 +561,16 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)){
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+  else {
+    list_less_func *cmp;
+    cmp = &cmp_priority;
+    struct list_elem *t = list_max(&ready_list, cmp, NULL);
+    list_remove(t);
+    return list_entry(t, struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -629,7 +640,6 @@ schedule (void)
   if (curr != next)
     prev = switch_threads (curr, next);
   schedule_tail (prev);
-  //print_list(&ready_list);
 }
 
 /* Returns a tid to use for a new thread. */

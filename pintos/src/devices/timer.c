@@ -104,7 +104,11 @@ timer_sleep (int64_t ticks)
   curr->sleep_start_ticks = start;
   curr->sleep_ticks = ticks;
   curr->sleep_end_ticks = start + ticks;
+  
+  enum intr_level old_level;
+  old_level = intr_disable();
   thread_block();
+  intr_set_level (old_level);
   /*
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
