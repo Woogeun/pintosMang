@@ -23,8 +23,7 @@ case $1 in
     done
     break;;
   *)
-    test="alarm-"$1
-    echo "$pintos $test"
-    $pintos $test;;
+    echo "$pintos $1"
+    $pintos $1;;
     
 esac

@@ -330,7 +330,7 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
-  print_thread(t);
+  //print_thread(t);
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
@@ -577,11 +577,6 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list)){
     return idle_thread;
-<<<<<<< HEAD
-  else
-    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    return list_entry(list_max(&ready_list,&cmp_priority,NULL), struct thread, elem);
-=======
   }
   else {
     list_less_func *cmp;
@@ -590,7 +585,6 @@ next_thread_to_run (void)
     list_remove(t);
     return list_entry(t, struct thread, elem);
   }
->>>>>>> 9e01ffc1f1aedbf2af11f06eb209da82468a5bbf
 }
 
 /* Completes a thread switch by activating the new thread's page
