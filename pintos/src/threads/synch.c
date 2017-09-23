@@ -86,12 +86,11 @@ sema_down (struct semaphore *sema)
     {
       list_push_back (&sema->waiters, &thread_current ()->elem);
       
-      thread_current() -> sema_wrapper = sema;
-      int holder_eff, thread_eff;
-      thread_eff = thread_get_priority_eff();
-      struct semaphore *sema_temp = sema;
+      //thread_current() -> sema_wrapper = sema;
+      //int holder_eff, thread_eff;
+      //thread_eff = thread_get_priority_eff();
+      //struct semaphore *sema_temp = sema;
       
-      thread_current()->enter_sema=true;
       /*
       do {
         holder_eff = sema_get_holder_priority(sema_temp);
@@ -103,7 +102,7 @@ sema_down (struct semaphore *sema)
       } while(sema_temp != NULL);
       */
       //priority_update();
-      thread_block ();
+      thread_block();
     }
   sema->value--;
   intr_set_level (old_level);
@@ -111,17 +110,15 @@ sema_down (struct semaphore *sema)
 
 void
 priority_update(){
-  struct thread* original = thread_current();
-  int thread_eff = original -> priority_eff;
-
-  struct thread *thread_holder = original->sema_wrapper->lock_holder;
-  
-  original->enter_sema = true;
-  original->which_thread = 1;
-
-  while(thread_holder->sema_wrapper !=NULL){
-    thread_unblock(thread_holder);
+  ASSERT(intr_get_level() == INTR_OFF);
+  thread_current()->enter_sema = true;
+  struct thread *curr = thread_current();
+  while(curr->sema_wrapper !=NULL){
+    if (curr ->sema_wrapper -> lock_holder -> sema_wrapper !=NULL){
+      thread_unblock(curr->sema_wrapper->lock_holder);
+    }
     thread_block();
+    curr = curr -> sema_wrapper ->lock_holder;
   }
 }
 
@@ -169,7 +166,6 @@ sema_up (struct semaphore *sema)
     struct thread *max_priority_thread = list_entry(max_priority_list_elem, struct thread, elem);
     ASSERT(max_priority_thread->status == THREAD_BLOCKED);
     list_remove(max_priority_list_elem);
-    max_priority_thread->sema_wrapper = NULL;
     thread_unblock (max_priority_thread);
   }
   sema->value++;
@@ -253,7 +249,26 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+/*
+  struct thread* curr= thread_current();
+  int holder_eff, thread_eff;
+  thread_eff = thread_get_priority_eff();
+  curr->sema_wrapper = &lock->semaphore;
+  struct semaphore *sema_temp = &lock->semaphore;
+
+  do{
+    holder_eff = sema_get_holder_priority(sema_temp);
+    if (holder_eff < thread_eff){
+      sema_set_holder_priority(sema_temp, thread_eff);
+    }
+    sema_temp=sema_temp->lock_holder->sema_wrapper;
+  }while(sema_temp != NULL);
+
+*/
   sema_down (&lock->semaphore);
+
+  //curr->sema_wrapper = NULL;
+
   lock->holder = thread_current ();
   lock->semaphore.lock_holder = thread_current();
 }

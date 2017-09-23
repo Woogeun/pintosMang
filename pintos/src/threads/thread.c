@@ -301,8 +301,6 @@ thread_block (void)
     list_insert_ordered(&waiting_list, &curr->elem, &cmp_timeticks, NULL);
   }
 
-  if (thread_current()->enter_sema ==true){
-  }
   curr->status = THREAD_BLOCKED;
   schedule ();
   //intr_set_level(old_level);
@@ -582,6 +580,8 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
+    //if (running_thread()->enter_sema == true)
+    //  return running_thread()->sema_wrapper->lock_holder;
     struct list_elem *t = list_max(&ready_list, &cmp_priority, NULL);
     list_remove(t);
     return list_entry(t, struct thread, elem);
@@ -651,10 +651,28 @@ schedule (void)
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (curr->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
+ 
+  /*
+  int priority_temp =0;
+  if (curr->enter_sema == true){
+    curr->enter_sema = false;
+    priority_temp = curr->priority_eff;
+  }
+  */
 
   if (curr != next)
     prev = switch_threads (curr, next);
   schedule_tail (prev);
+/*
+  if (temp==1){
+    if (running_thread()->priority_eff < priority_temp){
+      running_thread()->priority_eff = priority_temp;
+    }
+    if (running_thread()->sema_wrapper !=NULL)
+      running_thread()->enter_sema=true;
+    temp=0;
+  }
+  */
 }
 
 /* Returns a tid to use for a new thread. */
