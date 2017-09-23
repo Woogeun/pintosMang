@@ -300,6 +300,9 @@ thread_block (void)
   if (curr != idle_thread && curr->sleep_end_ticks!=INT64_MAX ) {
     list_insert_ordered(&waiting_list, &curr->elem, &cmp_timeticks, NULL);
   }
+
+  if (thread_current()->enter_sema ==true){
+  }
   curr->status = THREAD_BLOCKED;
   schedule ();
   //intr_set_level(old_level);
@@ -540,12 +543,18 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+
   t->priority = priority;
   t->priority_eff = priority;
   t->magic = THREAD_MAGIC;
+  
   t->sleep_start_ticks = INT64_MAX;
   t->sleep_ticks = 0;
   t->sleep_end_ticks = INT64_MAX;
+  
+  t->sema_wrapper = NULL;
+  t->enter_sema = false;
+  t->which_thread = 0;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

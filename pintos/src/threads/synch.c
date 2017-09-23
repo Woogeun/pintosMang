@@ -59,6 +59,20 @@ sema_init (struct semaphore *sema, unsigned value)
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. This is
    sema_down function. */
+
+int sema_get_holder_priority(struct semaphore* sema) {
+  return sema->lock_holder->priority_eff;
+}
+
+void sema_set_holder_priority(struct semaphore* sema, int priority_eff) {
+  sema->lock_holder->priority_eff = priority_eff;
+}
+
+struct semaphore *sema_wrapper(struct semaphore* sema) {
+  return sema->lock_holder->sema_wrapper;
+}
+
+
 void
 sema_down (struct semaphore *sema) 
 {
@@ -71,19 +85,46 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_push_back (&sema->waiters, &thread_current ()->elem);
+      
+      thread_current() -> sema_wrapper = sema;
+      int holder_eff, thread_eff;
+      thread_eff = thread_get_priority_eff();
+      struct semaphore *sema_temp = sema;
+      
+      thread_current()->enter_sema=true;
       /*
-       *
-       *
-       *  change parent`s priority_eff
-       *
-       *
-       *
-       * */
+      do {
+        holder_eff = sema_get_holder_priority(sema_temp);
+        if (holder_eff < thread_eff) {
+          sema_set_holder_priority(sema_temp, thread_eff);
+        }
+
+        sema_temp = sema_wrapper(sema_temp);
+      } while(sema_temp != NULL);
+      */
+      //priority_update();
       thread_block ();
     }
   sema->value--;
   intr_set_level (old_level);
 }
+
+void
+priority_update(){
+  struct thread* original = thread_current();
+  int thread_eff = original -> priority_eff;
+
+  struct thread *thread_holder = original->sema_wrapper->lock_holder;
+  
+  original->enter_sema = true;
+  original->which_thread = 1;
+
+  while(thread_holder->sema_wrapper !=NULL){
+    thread_unblock(thread_holder);
+    thread_block();
+  }
+}
+
 
 /* Down or "P" operation on a semaphore, but only if the
    semaphore is not already 0.  Returns true if the semaphore is
@@ -128,6 +169,7 @@ sema_up (struct semaphore *sema)
     struct thread *max_priority_thread = list_entry(max_priority_list_elem, struct thread, elem);
     ASSERT(max_priority_thread->status == THREAD_BLOCKED);
     list_remove(max_priority_list_elem);
+    max_priority_thread->sema_wrapper = NULL;
     thread_unblock (max_priority_thread);
   }
   sema->value++;
