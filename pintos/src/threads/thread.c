@@ -546,6 +546,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->sleep_start_ticks = INT64_MAX;
   t->sleep_ticks = 0;
   t->sleep_end_ticks = INT64_MAX;
+  t->including_sema = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

@@ -93,6 +93,7 @@ struct thread
     int64_t sleep_start_ticks;
     int64_t sleep_ticks;
     int64_t sleep_end_ticks;
+    struct semaphore* including_sema;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
