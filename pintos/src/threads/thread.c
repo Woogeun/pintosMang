@@ -290,21 +290,14 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  //printf("blocked!!\n");
-  //print_list(&waiting_list);
-  
-  
-  
-  //struct thread *curr = thread_current();
-  //enum intr_level old_level;
+
   ASSERT (!intr_context());
   ASSERT (intr_get_level() == INTR_OFF);
   //old_level = intr_disable();
   struct thread *curr = thread_current();
 
   //print_list(&waiting_list);
-
-  if (curr != idle_thread) {
+  if (curr != idle_thread && curr->sleep_end_ticks!=INT64_MAX ) {
     list_insert_ordered(&waiting_list, &curr->elem, &cmp_timeticks, NULL);
   }
   curr->status = THREAD_BLOCKED;

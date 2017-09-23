@@ -71,6 +71,14 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_push_back (&sema->waiters, &thread_current ()->elem);
+      /*
+       *
+       *
+       *  change parent`s priority_eff
+       *
+       *
+       *
+       * */
       thread_block ();
     }
   sema->value--;
@@ -115,10 +123,15 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    struct list_elem *max_priority_list_elem = list_max(&sema->waiters, &cmp_priority, NULL);
+    struct thread *max_priority_thread = list_entry(max_priority_list_elem, struct thread, elem);
+    ASSERT(max_priority_thread->status == THREAD_BLOCKED);
+    list_remove(max_priority_list_elem);
+    thread_unblock (max_priority_thread);
+  }
   sema->value++;
+  sema->lock_holder = NULL;
   intr_set_level (old_level);
 }
 
@@ -236,6 +249,7 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  lock->holder->priority_eff = lock->holder->priority;
   lock->holder = NULL;
   sema_up (&lock->semaphore); //handle lock_holder 
 }
