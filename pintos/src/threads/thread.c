@@ -413,6 +413,9 @@ thread_yield (void)
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level;
+  old_level = intr_disable();
+
   struct thread *curr = thread_current();
   if(!list_empty(&curr->lock_having)) {
     struct lock *temp = list_entry(list_front(&curr->lock_having), struct lock, elem_lock);
@@ -424,6 +427,8 @@ thread_set_priority (int new_priority)
     curr->priority = new_priority;
   }
   curr->priority_origin = new_priority;
+
+  intr_set_level(old_level);
   thread_yield();
 }
 
