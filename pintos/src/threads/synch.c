@@ -71,43 +71,11 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_push_back (&sema->waiters, &thread_current ()->elem);
-      
-      //thread_current() -> sema_wrapper = sema;
-      //int holder_eff, thread_eff;
-      //thread_eff = thread_get_priority_eff();
-      //struct semaphore *sema_temp = sema;
-      
-      /*
-      do {
-        holder_eff = sema_get_holder_priority(sema_temp);
-        if (holder_eff < thread_eff) {
-          sema_set_holder_priority(sema_temp, thread_eff);
-        }
-
-        sema_temp = sema_wrapper(sema_temp);
-      } while(sema_temp != NULL);
-      */
-      //priority_update();
       thread_block();
     }
   sema->value--;
   intr_set_level (old_level);
 }
-/*
-void
-priority_update(){
-  ASSERT(intr_get_level() == INTR_OFF);
-  thread_current()->enter_sema = true;
-  struct thread *curr = thread_current();
-  while(curr->sema_wrapper !=NULL){
-    if (curr ->sema_wrapper -> lock_holder -> sema_wrapper !=NULL){
-      thread_unblock(curr->sema_wrapper->lock_holder);
-    }
-    thread_block();
-    curr = curr -> sema_wrapper ->lock_holder;
-  }
-}
-*/
 
 /* Down or "P" operation on a semaphore, but only if the
    semaphore is not already 0.  Returns true if the semaphore is
@@ -148,20 +116,20 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) {
-    /*
+    
     struct list_elem *max_pri_elem = list_max(&sema->waiters, &cmp_priority, NULL);
     struct thread *max_pri_thread = list_entry(max_pri_elem, struct thread, elem);
     
     ASSERT(max_pri_thread->status == THREAD_BLOCKED);
     list_remove(max_pri_elem);
     thread_unblock (max_pri_thread);
-    */
 
-    thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+    //thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
   }
 
   sema->value++;
   intr_set_level (old_level);
+  thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -239,7 +207,10 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
- /* 
+
+  enum intr_level old_level;
+  old_level = intr_disable();
+
   struct thread* curr= thread_current();
   int thread_pri = thread_get_priority();
   int  holder_pri = 0;
@@ -250,16 +221,19 @@ lock_acquire (struct lock *lock)
     if(lock_temp->holder == NULL)
       break;
     holder_pri = lock_temp->holder->priority;
-    if (holder_pri < thread_pri)
+    if (holder_pri < thread_pri){
       lock_temp->holder->priority = thread_pri;
+    }
 
     lock_temp = lock_temp->holder->lock_waiting;
   } while(lock_temp != NULL);
-*/
+  intr_set_level(old_level);
+  thread_yield();
   sema_down (&lock->semaphore);
 
   lock->holder = thread_current ();
   lock->holder->lock_waiting = NULL;
+  //intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -294,7 +268,7 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-//  lock->holder->priority = lock->holder->priority_origin;
+  lock->holder->priority = lock->holder->priority_origin;
   lock->holder = NULL;
   sema_up (&lock->semaphore); //handle lock_holder 
 }
