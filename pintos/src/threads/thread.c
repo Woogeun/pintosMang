@@ -306,7 +306,6 @@ thread_block (void)
   //old_level = intr_disable();
   struct thread *curr = thread_current();
 
-  //print_list(&waiting_list);
   if (curr != idle_thread && curr->sleep_end_ticks!=INT64_MAX ) {
     list_insert_ordered(&waiting_list, &curr->elem, &cmp_timeticks, NULL);
   }
@@ -332,8 +331,6 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
-  //print_thread(t);
-  //printf("%s, pri=%d\n",t->name,t->priority);
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
@@ -595,8 +592,6 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    //if (running_thread()->enter_sema == true)
-    //  return running_thread()->sema_wrapper->lock_holder;
     struct list_elem *t = list_max(&ready_list, &cmp_priority, NULL);
     list_remove(t);
     return list_entry(t, struct thread, elem);
@@ -667,27 +662,9 @@ schedule (void)
   ASSERT (curr->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
  
-  /*
-  int priority_temp =0;
-  if (curr->enter_sema == true){
-    curr->enter_sema = false;
-    priority_temp = curr->priority_eff;
-  }
-  */
-
   if (curr != next)
     prev = switch_threads (curr, next);
   schedule_tail (prev);
-/*
-  if (temp==1){
-    if (running_thread()->priority_eff < priority_temp){
-      running_thread()->priority_eff = priority_temp;
-    }
-    if (running_thread()->sema_wrapper !=NULL)
-      running_thread()->enter_sema=true;
-    temp=0;
-  }
-  */
 }
 
 /* Returns a tid to use for a new thread. */

@@ -254,13 +254,14 @@ lock_acquire (struct lock *lock)
   } while(lock_temp != NULL);
   intr_set_level(old_level);
 
-  //thread_yield();
   sema_down (&lock->semaphore);
 
   lock->holder = thread_current ();
   lock->holder->lock_waiting = NULL;
 
   list_insert_ordered(&lock->holder->lock_having, &lock->elem_lock, &cmp_pri_lock, true);
+
+
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
