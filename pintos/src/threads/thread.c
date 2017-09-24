@@ -89,7 +89,7 @@ bool cmp_priority(
     void *aux) {
   struct thread *cmp1 = list_entry(a, struct thread, elem);
   struct thread *cmp2 = list_entry(b, struct thread, elem);
-  if (cmp1->priority_eff < cmp2->priority_eff) {
+  if (cmp1->priority < cmp2->priority) {
     return true;
   } 
   return false;
@@ -323,6 +323,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   //print_thread(t);
+  //printf("%s, pri=%d\n",t->name,t->priority);
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
@@ -404,6 +405,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  thread_current ()->priority_origin = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -413,17 +415,11 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
-void
-thread_set_priority_eff (int new_priority) 
-{
-  thread_current ()->priority_eff = new_priority;
-}
-
 /* Returns the current thread's priority. */
 int
-thread_get_priority_eff (void) 
+thread_get_priority_origin (void) 
 {
-  return thread_current ()->priority_eff;
+  return thread_current ()->priority_origin;
 }
 
 
@@ -543,16 +539,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
 
   t->priority = priority;
-  t->priority_eff = priority;
+  t->priority_origin = priority;
   t->magic = THREAD_MAGIC;
   
   t->sleep_start_ticks = INT64_MAX;
   t->sleep_ticks = 0;
   t->sleep_end_ticks = INT64_MAX;
   
-  t->sema_wrapper = NULL;
-  t->enter_sema = false;
-  t->which_thread = 0;
+  t->lock_waiting = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
