@@ -287,7 +287,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   //printf("i will create thread\n");
   thread_unblock (t);
-  thread_yield();
+  if(t->priority > thread_current()->priority){
+    thread_yield();
+  }
   return tid;
 }
 
