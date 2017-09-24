@@ -89,11 +89,20 @@ bool cmp_priority(
     void *aux) {
   struct thread *cmp1 = list_entry(a, struct thread, elem);
   struct thread *cmp2 = list_entry(b, struct thread, elem);
-  if (cmp1->priority < cmp2->priority) {
-    return true;
-  } 
-  return false;
+  if (aux == NULL) {
+    if (cmp1->priority < cmp2->priority) {
+      return true;
+    } 
+    return false;
+  } else {
+    if (cmp1->priority > cmp2->priority) {
+      return true;
+    }
+    return false;
+  }
 }
+
+
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
@@ -549,6 +558,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->sleep_end_ticks = INT64_MAX;
   
   t->lock_waiting = NULL;
+  list_init(&t->lock_having);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

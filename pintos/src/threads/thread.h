@@ -95,6 +95,7 @@ struct thread
     int64_t sleep_end_ticks;
     
     struct lock* lock_waiting;
+    struct list lock_having;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */

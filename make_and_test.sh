@@ -16,6 +16,7 @@ case $1 in
     cd ./build
     make check
     make grade
+    vi grade
     break;;
   "alarm")
     for alarm in "${alarm[@]}"; do
