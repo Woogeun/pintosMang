@@ -140,11 +140,12 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) {
-    struct list_elem *max_pri_elem = list_pop_front(&sema->waiters);
+    //struct list_elem *max_pri_elem = list_pop_front(&sema->waiters);
+    struct list_elem *max_pri_elem = list_max(&sema->waiters, &cmp_priority, NULL);
     struct thread *max_pri_thread = list_entry(max_pri_elem, struct thread, elem);
 
     ASSERT(max_pri_thread->status == THREAD_BLOCKED);
-    //list_remove(max_pri_elem);
+    list_remove(max_pri_elem);
     thread_unblock (max_pri_thread);
 
   }
