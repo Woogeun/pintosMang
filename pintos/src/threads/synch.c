@@ -236,7 +236,6 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-  //printf("Hi i`m acqruie\n");
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
@@ -261,7 +260,6 @@ lock_acquire (struct lock *lock)
 
   lock->holder = thread_current ();
   lock->holder->lock_waiting = NULL;
-  //printf("i1m acuire end\n");
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
