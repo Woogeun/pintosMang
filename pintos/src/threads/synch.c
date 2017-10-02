@@ -282,14 +282,17 @@ lock_acquire (struct lock *lock)
 
   struct thread* curr= thread_current();
   int thread_pri = thread_get_priority();
-  int  holder_pri = 0;
+  int holder_pri;
   struct lock *lock_temp = lock;
 
   curr->lock_waiting = lock;
+
   do {
-    if(lock_temp->holder == NULL)
+    if(lock_temp->holder == 0x0) {
+      lock_temp->pri_of_lock = thread_pri;
       break;
-    holder_pri = lock_temp->holder->priority;
+    }
+    holder_pri = lock_temp->pri_of_lock;
     if (holder_pri < thread_pri){
       lock_temp->holder->priority = thread_pri;
       lock_temp->pri_of_lock = thread_pri;
@@ -301,11 +304,10 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
 
-  lock->holder = thread_current ();
-  lock->holder->lock_waiting = NULL;
+  lock->holder = curr;
+  curr->lock_waiting = NULL;
 
-  //thread_yield();
-  list_insert_ordered(&lock->holder->lock_having, &lock->elem_lock, &cmp_pri_lock, true);
+  list_insert_ordered(&curr->lock_having, &lock->elem_lock, &cmp_pri_lock, true);
 
 
 }

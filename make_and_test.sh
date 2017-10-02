@@ -4,6 +4,7 @@ make
 
 
 pintos="../utils/pintos -v -- -q run"
+pintos_test="make /test/threads/"
 alarm=("alarm-single" "alarm-multiple" "alarm-zero" "alarm-negative" "alarm-simultaneous" "alarm-priority")
 
 priority=("priority-change" "priority-donate-one" "priority-donate-multiple" "priority-donate-multiple2" "priority-donate-nest" "priority-donate-sema" "priority-donate-lower" "priority-donate-chain" "priority-fifo" "priority-preempt" "priority-sema" "priority-condvar")
