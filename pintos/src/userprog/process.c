@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -38,20 +39,20 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char *func_name_ptr, *temp_ptr;
-  func_name_ptr = strtok_r(fn_copy, " ", &temp_ptr);
-
-  /*
-  while(ret_ptr) {
-    printf("ret_ptr = %s\n", ret_ptr);
-    ret_ptr = strtok_r(NULL, " ", &next_ptr);
-  }
-  */
+  //extract function name only
+  size_t fn_len = strlen(file_name);
+  char *fn = (char *) malloc (sizeof(char) * (fn_len + 1));
+  char *tmp;
+  memset(fn, 0, sizeof(char) * (fn_len + 1));
+  strlcpy(fn, file_name, fn_len + 1);
+  fn = strtok_r(fn, " ", &tmp);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (func_name_ptr, PRI_DEFAULT, start_process, file_name);
+  tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  free(fn);
   return tid;
 }
 
@@ -72,6 +73,7 @@ start_process (void *f_name)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
+
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
@@ -98,6 +100,7 @@ start_process (void *f_name)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(true);
   return -1;
 }
 
@@ -205,7 +208,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, int argc, char **argv);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -225,26 +228,49 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
-  char *f_name = file_name;
-  char *ret_ptr, *temp_ptr;
+  //parse file_name
+  size_t fn_len = strlen(file_name);
+  char *fn = (char *) malloc (sizeof(char) * (fn_len + 1));
+  strlcpy(fn, file_name, fn_len + 1);
 
-  ret_ptr = strtok_r(f_name, " ", &temp_ptr);
-  
-  while(ret_ptr) {
-    //printf("ret_ptr = [%s]\n", ret_ptr);
-    // push arguments and # of arguments,
-    // asm volatile (asdfasdf )
-    ret_ptr = strtok_r(NULL, " ", &temp_ptr);
+  //count the arguments
+  int argc = 0;
+  char *ret, *tmp;
+  ret = strtok_r(fn, " ", &tmp);
+  while(ret != NULL) {
+    //printf("argv[%d]: %s\n", argc++, ret);
+    argc++;
+    ret = strtok_r(NULL, " ", &tmp);
   }
+  //printf("argc: %d\n", argc);
+  strlcpy(fn, file_name, fn_len + 1);
+
+  //store the arguments
+  char **argv = (char **) malloc(sizeof(char *) * argc);
+
+  ret = strtok_r(fn, " ", &tmp);
+  for (i = 0; i < argc; i++) {
+    argv[i] = ret;
+    ret = strtok_r(NULL, " ", &tmp);
+  }
+  //printf("phys_base: %x\n", PHYS_BASE); PHYS_BASE = 0xc0000000
+ /* 
+  for (i = 0; i < argc; i++) {
+    printf("argv[%d] = %s, %x\n", i, argv[i], argv[i]);
+  }
+*/
+  //int dump_size = 64;
+  //char buffer[dump_size];
+  //hex_dump (PHYS_BASE-dump_size, buffer, dump_size, true);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL) 
+  if (t->pagedir == NULL)
     goto done;
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -324,9 +350,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argc, argv))
     goto done;
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -335,6 +360,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
+  free(fn);
+  free(argv);
   return success;
 }
 
@@ -449,7 +477,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, int argc, char **argv) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -463,6 +491,76 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+  int i;
+  size_t len;
+  void **addresses = (void **) malloc(sizeof(void *) * argc);
+
+  for (i = argc-1; i >= 0; i--) {
+    //printf("argv address: %x\n", argv[i]);
+    len = strlen(argv[i]);
+    //char *tmp = (char *) malloc (sizeof(char) * (len + 1));
+    //printf("tmp  address: %x\n", tmp);
+    //strlcpy(tmp, argv[i], len + 1);
+    *esp -= len + 1;
+    //printf("before: %s\n", *esp);
+    addresses[i] = memcpy(*esp, argv[i], len + 1);
+    //printf("after : %s, addresses[%d]: 0x%x\n", *esp, i, addresses[i]);
+    //free(tmp);
+  }
+
+  //align set zero
+  //printf("*esp: %x\n", *esp);
+  int align = (int) *esp % 4;
+  if (align < 0)
+    align += 4;
+  *esp -= align;
+  //printf("align: %d, *esp: %x\n", align, *esp);
+  memset(*esp, 0, align);
+
+  //set imaginary argument
+  *esp -= sizeof(int);
+  memset(*esp, 0, sizeof(int));
+
+  for (i = argc - 1; i >= 0; i--) {
+    *esp -= sizeof(int);
+    //printf("before: %s\n", (char *)**esp);
+    memcpy(*esp, &addresses[i], sizeof(int));
+    //printf("after : %s\n", (char *)**esp);
+  }
+
+  //push argv address
+  int argv_address = *esp;
+  *esp -= sizeof(int);
+  memcpy(*esp, &argv_address, sizeof(int));
+
+  //push argc
+  *esp -= sizeof(int);
+  memcpy(*esp, &argc, sizeof(int));
+
+  //push return address zero
+  *esp -= sizeof(int);
+  memset(*esp, 0, sizeof(int));
+
+ /*
+  //printf("argv[0]: %s, strlen(argv[0]): %d\n", argv[0], strlen(argv[0]));
+  len = strlen(argv[0]);
+  *esp -= len + 1;
+  printf("*esp: %x\n", *esp);
+  memcpy(*esp, argv[0], len + 1);
+  printf("copyed!!!\n");
+*/
+
+  /*
+  int size=64;
+  char buffer[size];
+  memset(buffer, 0, sizeof(buffer));
+  printf("buffer: 0x%x\n", buffer);
+  hex_dump(PHYS_BASE - size, PHYS_BASE-size, size, true);
+
+*/
+  free(addresses);
+  //printf("*esp is :0x%x\n", *esp);
   return success;
 }
 
