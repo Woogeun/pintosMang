@@ -88,14 +88,6 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int priority_origin;
-
-    int64_t sleep_start_ticks;
-    int64_t sleep_ticks;
-    int64_t sleep_end_ticks;
-    
-    struct lock* lock_waiting;
-    struct list lock_having;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -136,17 +128,9 @@ void thread_yield (void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
-int thread_get_priroity_eff (void);
-void thread_set_priority_eff (int);
-
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
-bool cmp_priority(const struct list_elem*, const struct list_elem*, void *);
-void print_thread(const struct thread*);
-void print_waiting_list(const struct list*);
 
 #endif /* threads/thread.h */

@@ -19,6 +19,7 @@ pagedir_create (void)
   uint32_t *pd = palloc_get_page (0);
   if (pd != NULL)
     memcpy (pd, base_page_dir, PGSIZE);
+
   return pd;
 }
 
