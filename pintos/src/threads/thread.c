@@ -441,6 +441,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+  t->wait_thread = NULL;
   list_init(&t->child_list);
   list_init(&t->file_list);
 }

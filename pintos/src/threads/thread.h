@@ -100,8 +100,15 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    struct list file_list;
-    struct list child_list;
+    struct thread *wait_thread;
+    struct list file_list;              /* list of file_info */
+    struct list child_list;             /* list of child_info */
+  };
+
+  struct child_info {
+    tid_t tid;
+    struct thread *thread;
+    struct list_elem elem;
   };
 
 /* If false (default), use round-robin scheduler.
