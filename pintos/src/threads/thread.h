@@ -105,11 +105,6 @@ struct thread
     struct list child_list;             /* list of child_info */
   };
 
-  struct child_info {
-    tid_t tid;
-    struct thread *thread;
-    struct list_elem elem;
-  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

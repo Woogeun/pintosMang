@@ -10,35 +10,41 @@
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include <string.h>
+#include "userprog/process.h"
 
 
 static void syscall_handler (struct intr_frame *);
 
-static void halt(void);						//done
-static void exit(int);						
-static tid_t exec(const char *);				
-static int wait(tid_t);					
-static bool create(const char *, size_t);	//done					
-static bool remove(const char *);			//maybe done			
-static int open(const char *);				//done		
-static int filesize(int);					//maybe done
-static int read(int, char *, size_t);		//done
-static int write(int, const char *, size_t);//done	
-static void seek(int, unsigned);			//maybe done
-static unsigned tell(int);					//maybe done
-static void close(int);						//done
+void halt(void);						//done
+void exit(int);						
+tid_t exec(const char *);				
+int wait(tid_t);					
+bool create(const char *, size_t);		//done					
+bool remove(const char *);				//maybe done			
+int open(const char *);					//done		
+int filesize(int);						//maybe done
+int read(int, char *, size_t);			//done
+int write(int, const char *, size_t);	//done	
+void seek(int, unsigned);				//maybe done
+unsigned tell(int);						//maybe done
+void close(int);						//done
 
 static int return_args(struct intr_frame *, int);
 static bool valid_wait_tid(tid_t);
 static struct wait_info *create_wait_info(void);
 static void remove_wait_info(struct wait_info *);
 static void awake_wait_thread(int);
+static struct child_info *create_child_info(void);
+static void remove_child_info(struct child_info *);
 static bool valid_address(const void *);
 static struct file_info *create_file_info(void);
 static void remove_file_info(struct file_info *);
 static int get_fd(struct list *);
 static bool cmp_fd(const struct list_elem *, const struct list_elem *, void *);
 static struct file_info *find_file_info_by_fd(int);
+static struct child_info *find_child_info_by_tid(tid_t);
+static void free_child_list(void);
+static void free_file_list(void);
 
 static struct list wait_list;
 struct lock filesys_lock;
@@ -76,53 +82,64 @@ syscall_handler (struct intr_frame *f)
   	case SYS_CLOSE:		close(arg1); break;
   	default:	break;
   }
-  //printf ("system call!: %d\n", *(int *) f->esp);
-  //printf(" esp: 0x%x\n", (int *) f->esp);
-  //printf("*esp + 4: 0x%x\n", *(((int *) f->esp) + 1));
-  //printf("*esp + 8: %s\n", *(((int *) f->esp) + 2));
-  //printf("*esp + 12: %d\n", *(((int *) f->esp) + 3));
-  //printf("*esp + 16: 0x%x\n", *(((int *) f->esp) + 4));
-  //hex_dump((int *) f->esp, (int *) f->esp, 0xc0000000 - (int) f->esp, true);
-
-  //thread_exit ();
 }
 
-static void halt() {
+void halt() {
 	power_off();
 }
 
-static void exit(int status) {
+void exit(int status) {
 	struct thread *curr = thread_current();
 	char *file_name = curr->name;
 
 	printf("%s: exit(%d)\n", file_name, status);
 
+	enum intr_level old_level;
+	old_level = intr_disable();
+
 	//return to kernel
 	awake_wait_thread(status);
 
-	lock_acquire(&filesys_lock);
-	filesys_done();
-	lock_release(&filesys_lock);
+	//free all of the child and files
+	free_child_list();
+	free_file_list();
+
+	intr_set_level(old_level);
 
 	thread_exit();
 }
 
-static tid_t exec(const char *cmd_line) {
+tid_t exec(const char *cmd_line) {
+
+	//printf("exec!!!!!!!!!!!!!!!!=====================: %s\n", cmd_line);
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
 
-	//create process
-
 	//set child process information
+	struct thread *curr = thread_current();
+	struct child_info *child = create_child_info();
+	tid_t tid = process_execute(cmd_line);
 
-	return 0;
+	child->tid = tid;
+
+	list_push_back(&curr->child_list, &child->elem);
+	
+	int status = wait(tid);
+	if (status == -1)
+		return -1;
+
+	return tid;
 }
 
-static int wait(tid_t tid) {
-	//check tid is child tid
+int wait(tid_t tid) {
 	if (!valid_wait_tid(tid)) 
 		return -1;
+
+	enum intr_level old_level;
+	old_level = intr_disable();
+
 	struct thread *curr = thread_current();
+	struct child_info *c_info = find_child_info_by_tid(tid);
 	struct wait_info *w_info = create_wait_info();
 	
 	w_info->waiter_thread = curr;
@@ -131,11 +148,17 @@ static int wait(tid_t tid) {
 
 	list_push_back(&wait_list, &w_info->elem);
 	thread_block();
+	intr_set_level(old_level);
+
+	list_remove(&c_info->elem);
+	remove_child_info(c_info);
+	list_remove(&w_info->elem);
+	remove_wait_info(w_info);
 
 	return w_info->status;
 }
 
-static bool create(const char *file, unsigned size) {
+bool create(const char *file, unsigned size) {
 	if (!valid_address((void *) file))
 		exit(-1);
 
@@ -155,7 +178,7 @@ static bool create(const char *file, unsigned size) {
 	return success;
 }
 
-static bool remove(const char *file) {
+bool remove(const char *file) {
 	if (!valid_address((void *) file))
 		exit(-1);
 
@@ -168,7 +191,7 @@ static bool remove(const char *file) {
 	return success;
 }
 
-static int open(const char *file_name) {
+int open(const char *file_name) {
 	if (!valid_address((void *) file_name))
 		exit(-1);
 
@@ -199,7 +222,7 @@ static int open(const char *file_name) {
 
 }
 
-static int filesize(int fd) {
+int filesize(int fd) {
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL)
 		exit(-1);
@@ -212,7 +235,7 @@ static int filesize(int fd) {
 	return size;
 }
 
-static int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
+int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
 	if (!valid_address((void *) buffer)) {
 		if ((unsigned) buffer < 0xc0000000) {
 			uint32_t *pd = active_pd();
@@ -243,7 +266,7 @@ static int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
 	return size;
 }
 
-static int write(int fd, const char *buffer, size_t size) {
+int write(int fd, const char *buffer, size_t size) {
 	if (!valid_address((void *) buffer))
 		exit(-1);
 
@@ -269,7 +292,7 @@ static int write(int fd, const char *buffer, size_t size) {
 	return size;
 }
 
-static void seek(int fd, unsigned position) {
+void seek(int fd, unsigned position) {
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL)
 		exit(-1);
@@ -279,7 +302,7 @@ static void seek(int fd, unsigned position) {
 	lock_release(&filesys_lock);
 }
 
-static unsigned tell(int fd) {
+unsigned tell(int fd) {
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL) 
 		exit(-1);
@@ -292,7 +315,7 @@ static unsigned tell(int fd) {
 	return pos; 
 }
 
-static void close(int fd) {
+void close(int fd) {
 	if (fd == 0 || fd == 1) {
 		exit(-1);
 	}
@@ -351,6 +374,15 @@ static void awake_wait_thread(int status) {
 	}
 
 	intr_set_level(old_level);
+}
+
+static struct child_info *create_child_info() {
+	struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
+	return ptr;
+}
+
+static void remove_child_info(struct child_info *child){
+	free(child);
 }
 
 static bool valid_address(const void *address) {
@@ -417,8 +449,38 @@ static struct file_info *find_file_info_by_fd(int fd) {
 	return NULL;
 }
 
+static struct child_info *find_child_info_by_tid(tid_t tid) {
+	struct thread *curr = thread_current();
+	struct list *child_list = &curr->child_list;
+	struct list_elem *e;
+	for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
+		struct child_info *c_info = list_entry(e, struct child_info, elem);
+		if (c_info->tid == tid) return c_info;
+	}
+	return NULL;
+}
 
+static void free_child_list() {
+	struct thread *curr = thread_current();
+	struct list *child_list = &curr->child_list;
+	
+	while(!list_empty(child_list)) {
+		struct list_elem *e = list_pop_front(child_list);
+		struct child_info *c_info = list_entry(e, struct child_info, elem);
+		remove_child_info(c_info);
+	}
+}
 
+static void free_file_list() {
+	struct thread *curr = thread_current();
+	struct list *file_list = &curr->file_list;
+
+	while(!list_empty(file_list)) {
+		struct list_elem *e = list_pop_front(file_list);
+		struct file_info *f_info = list_entry(e, struct file_info, elem);
+		remove_file_info(f_info);
+	}
+}
 
 
 

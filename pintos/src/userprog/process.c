@@ -49,6 +49,7 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
@@ -84,6 +85,7 @@ start_process (void *f_name)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
@@ -101,7 +103,6 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   while(true);
-  //printf("curr----------------------------------------: %s\n", thread_current()->name);
   return -1;
 }
 
@@ -239,11 +240,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *ret, *tmp;
   ret = strtok_r(fn, " ", &tmp);
   while(ret != NULL) {
-    //printf("argv[%d]: %s\n", argc++, ret);
     argc++;
     ret = strtok_r(NULL, " ", &tmp);
   }
-  //printf("argc: %d\n", argc);
+
   strlcpy(fn, file_name, fn_len + 1);
 
   //store the arguments
@@ -254,15 +254,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     argv[i] = ret;
     ret = strtok_r(NULL, " ", &tmp);
   }
-  //printf("phys_base: %x\n", PHYS_BASE); PHYS_BASE = 0xc0000000
- /* 
-  for (i = 0; i < argc; i++) {
-    printf("argv[%d] = %s, %x\n", i, argv[i], argv[i]);
-  }
-*/
-  //int dump_size = 64;
-  //char buffer[dump_size];
-  //hex_dump (PHYS_BASE-dump_size, buffer, dump_size, true);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -498,25 +489,16 @@ setup_stack (void **esp, int argc, char **argv)
   void **addresses = (void **) malloc(sizeof(void *) * argc);
 
   for (i = argc-1; i >= 0; i--) {
-    //printf("argv address: %x\n", argv[i]);
     len = strlen(argv[i]);
-    //char *tmp = (char *) malloc (sizeof(char) * (len + 1));
-    //printf("tmp  address: %x\n", tmp);
-    //strlcpy(tmp, argv[i], len + 1);
     *esp -= len + 1;
-    //printf("before: %s\n", *esp);
     addresses[i] = memcpy(*esp, argv[i], len + 1);
-    //printf("after : %s, addresses[%d]: 0x%x\n", *esp, i, addresses[i]);
-    //free(tmp);
   }
 
   //align set zero
-  //printf("*esp: %x\n", *esp);
   int align = (int) *esp % 4;
   if (align < 0)
     align += 4;
   *esp -= align;
-  //printf("align: %d, *esp: %x\n", align, *esp);
   memset(*esp, 0, align);
 
   //set imaginary argument
@@ -525,9 +507,7 @@ setup_stack (void **esp, int argc, char **argv)
 
   for (i = argc - 1; i >= 0; i--) {
     *esp -= sizeof(int);
-    //printf("before: %s\n", (char *)**esp);
     memcpy(*esp, &addresses[i], sizeof(int));
-    //printf("after : %s\n", (char *)**esp);
   }
 
   //push argv address
@@ -543,25 +523,7 @@ setup_stack (void **esp, int argc, char **argv)
   *esp -= sizeof(int);
   memset(*esp, 0, sizeof(int));
 
- /*
-  //printf("argv[0]: %s, strlen(argv[0]): %d\n", argv[0], strlen(argv[0]));
-  len = strlen(argv[0]);
-  *esp -= len + 1;
-  printf("*esp: %x\n", *esp);
-  memcpy(*esp, argv[0], len + 1);
-  printf("copyed!!!\n");
-*/
-
-  /*
-  int size=64;
-  char buffer[size];
-  memset(buffer, 0, sizeof(buffer));
-  printf("buffer: 0x%x\n", buffer);
-  hex_dump(PHYS_BASE - size, PHYS_BASE-size, size, true);
-
-*/
   free(addresses);
-  //printf("*esp is :0x%x\n", *esp);
   return success;
 }
 

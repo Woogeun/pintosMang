@@ -6,6 +6,20 @@
 
 void syscall_init (void);
 
+void halt(void);						//done
+void exit(int);						
+tid_t exec(const char *);				
+int wait(tid_t);					
+bool create(const char *, size_t);		//done					
+bool remove(const char *);				//maybe done			
+int open(const char *);					//done		
+int filesize(int);						//maybe done
+int read(int, char *, size_t);			//done
+int write(int, const char *, size_t);	//done	
+void seek(int, unsigned);				//maybe done
+unsigned tell(int);						//maybe done
+void close(int);						//done
+
 struct file_info {
     int fd;
     struct file *file;
@@ -18,6 +32,11 @@ struct wait_info {
 	tid_t waitee_tid;
 	int status;
 	struct list_elem elem;
+};
+
+struct child_info {
+    tid_t tid;
+    struct list_elem elem;
 };
 
 #endif /* userprog/syscall.h */
