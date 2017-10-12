@@ -12,7 +12,6 @@
 #include <string.h>
 
 
-//
 static void syscall_handler (struct intr_frame *);
 
 static void halt(void);						//done
