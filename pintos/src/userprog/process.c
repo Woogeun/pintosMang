@@ -101,6 +101,7 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   while(true);
+  //printf("curr----------------------------------------: %s\n", thread_current()->name);
   return -1;
 }
 
@@ -273,7 +274,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -530,7 +531,7 @@ setup_stack (void **esp, int argc, char **argv)
   }
 
   //push argv address
-  int argv_address = *esp;
+  int argv_address = (int) *esp;
   *esp -= sizeof(int);
   memcpy(*esp, &argv_address, sizeof(int));
 
