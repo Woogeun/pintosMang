@@ -30,32 +30,30 @@ unsigned tell(int);						//maybe done
 void close(int);						//done
 
 static int return_args(struct intr_frame *, int);
-static bool valid_wait_tid(tid_t);
-static struct wait_info *create_wait_info(void);
-static void remove_wait_info(struct wait_info *);
-static void awake_wait_thread(int);
-static struct child_info *create_child_info(void);
-static void remove_child_info(struct child_info *);
+//static bool valid_wait_tid(tid_t);
+//static struct wait_info *create_wait_info(void);
+//static void remove_wait_info(struct wait_info *);
+//static void awake_wait_thread(int);
+//static struct child_info *create_child_info(void);
+//static void remove_child_info(struct child_info *);
 static bool valid_address(const void *);
 static struct file_info *create_file_info(void);
-static void remove_file_info(struct file_info *);
+//static void remove_file_info(struct file_info *);
 static int get_fd(struct list *);
 static bool cmp_fd(const struct list_elem *, const struct list_elem *, void *);
 static struct file_info *find_file_info_by_fd(int);
-static struct child_info *find_child_info_by_tid(tid_t);
-static void free_child_list(void);
-static void free_file_list(void);
+//static struct child_info *find_child_info_by_tid(tid_t);
+//static void free_child_list(void);
+//static void free_file_list(void);
 
-static struct list wait_list;
+//static struct list wait_list;
 struct lock filesys_lock;
-struct lock exit_lock;
 
 void
 syscall_init (void) 
 {
-	list_init(&wait_list);
+	//list_init(&wait_list);
 	lock_init(&filesys_lock);
-	lock_init(&exit_lock);
   	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -89,6 +87,7 @@ void halt() {
 }
 
 void exit(int status) {
+	/*
 	struct thread *curr = thread_current();
 	char *file_name = curr->name;
 
@@ -107,14 +106,19 @@ void exit(int status) {
 	intr_set_level(old_level);
 
 	thread_exit();
+	*/
+
+	process_exit(status);
 }
 
 tid_t exec(const char *cmd_line) {
+
 
 	//printf("exec!!!!!!!!!!!!!!!!=====================: %s\n", cmd_line);
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
 
+/*
 	//set child process information
 	struct thread *curr = thread_current();
 	struct child_info *child = create_child_info();
@@ -129,9 +133,13 @@ tid_t exec(const char *cmd_line) {
 		return -1;
 
 	return tid;
+	*/
+	tid_t tid = process_execute(cmd_line);
+	return tid;
 }
 
 int wait(tid_t tid) {
+	/*
 	if (!valid_wait_tid(tid)) 
 		return -1;
 
@@ -156,6 +164,9 @@ int wait(tid_t tid) {
 	remove_wait_info(w_info);
 
 	return w_info->status;
+	*/
+	int status = process_wait(tid);
+	return status;
 }
 
 bool create(const char *file, unsigned size) {
@@ -323,7 +334,7 @@ void close(int fd) {
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info != NULL) {
 		list_remove(&f_info->elem);
-		remove_file_info(f_info);
+		free(f_info);
 	} else {
 		exit(-1);
 	}
@@ -344,6 +355,7 @@ static int return_args(struct intr_frame *f, int order) {
 	return (int) *(((int *) f->esp) + order);
 }
 
+/*
 static bool valid_wait_tid(tid_t tid) {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
@@ -355,7 +367,8 @@ static bool valid_wait_tid(tid_t tid) {
 	}
 	return false;
 }
-
+*/
+/*
 static void awake_wait_thread(int status) {
 	struct list_elem *e;
 	tid_t curr_tid = thread_current()->tid;
@@ -375,7 +388,8 @@ static void awake_wait_thread(int status) {
 
 	intr_set_level(old_level);
 }
-
+*/
+/*
 static struct child_info *create_child_info() {
 	struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
 	return ptr;
@@ -384,7 +398,7 @@ static struct child_info *create_child_info() {
 static void remove_child_info(struct child_info *child){
 	free(child);
 }
-
+*/
 static bool valid_address(const void *address) {
 	uint32_t *pd = active_pd();
 
@@ -394,24 +408,26 @@ static bool valid_address(const void *address) {
 	return valid; 
 }
 
+/*
 static struct wait_info *create_wait_info() {
 	struct wait_info *ptr = (struct wait_info *) malloc (sizeof(struct wait_info));
 	return ptr;
 }
 
+
 static void remove_wait_info(struct wait_info *w_info) {
 	free(w_info);
 }
-
+*/
 static struct file_info *create_file_info() {
 	struct file_info *ptr = (struct file_info *) malloc (sizeof(struct file_info));
 	return ptr;
 }
-
+/*
 static void remove_file_info(struct file_info * ptr) {
 	free(ptr);
 }
-
+*/
 static int get_fd(struct list *list) {
 	int fd = 2;
 	struct list_elem *e;
@@ -448,7 +464,7 @@ static struct file_info *find_file_info_by_fd(int fd) {
 	}
 	return NULL;
 }
-
+/*
 static struct child_info *find_child_info_by_tid(tid_t tid) {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
@@ -459,7 +475,8 @@ static struct child_info *find_child_info_by_tid(tid_t tid) {
 	}
 	return NULL;
 }
-
+*/
+/*
 static void free_child_list() {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
@@ -481,7 +498,7 @@ static void free_file_list() {
 		remove_file_info(f_info);
 	}
 }
-
+*/
 
 
 

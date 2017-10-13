@@ -19,14 +19,15 @@ int write(int, const char *, size_t);	//done
 void seek(int, unsigned);				//maybe done
 unsigned tell(int);						//maybe done
 void close(int);						//done
-
+/*
 struct file_info {
     int fd;
     struct file *file;
     int position;
     struct list_elem elem;
 };
-
+*?
+/*
 struct wait_info {
 	struct thread *waiter_thread;
 	tid_t waitee_tid;
@@ -38,5 +39,5 @@ struct child_info {
     tid_t tid;
     struct list_elem elem;
 };
-
+*/
 #endif /* userprog/syscall.h */

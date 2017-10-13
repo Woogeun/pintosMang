@@ -91,6 +91,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&wait_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -281,7 +282,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  process_exit (0);
 #endif
 
   /* Just set our status to dying and schedule another process.

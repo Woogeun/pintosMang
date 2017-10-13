@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <list.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -21,6 +22,17 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+static struct child_info *create_child_info(void);
+static bool valid_wait_tid(tid_t);
+static struct child_info *find_child_info_by_tid(tid_t);
+static struct wait_info *create_wait_info(void);
+static void awake_wait_thread(int);
+static void free_child_list(void);
+static void free_file_list(void);
+//void remove_file_info(struct file_info *);
+
+struct list wait_list;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -47,13 +59,29 @@ process_execute (const char *file_name)
   strlcpy(fn, file_name, fn_len + 1);
   fn = strtok_r(fn, " ", &tmp);
 
-  /* Create a new thread to execute FILE_NAME. */
+  //set child process information
+  struct thread *curr = thread_current();
+  struct child_info *child = create_child_info();
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
+
+  child->tid = tid;
+  list_push_back(&curr->child_list, &child->elem);
+  
+  int status = process_wait(tid);
+
+  free(fn);
+  if (status == -1)
+    return -1;
+
+  //return tid;
+
+  /* Create a new thread to execute FILE_NAME. */
+  
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  free(fn);
+  //free(fn);
   return tid;
 }
 
@@ -77,7 +105,7 @@ start_process (void *f_name)
 
   palloc_free_page (file_name);
   if (!success) 
-    thread_exit ();
+    process_exit (-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -100,17 +128,62 @@ start_process (void *f_name)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t tid) 
 {
-  while(true);
-  return -1;
+  //while(true);
+  //return -1;
+
+  if (!valid_wait_tid(tid)) 
+    return -1;
+
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  struct thread *curr = thread_current();
+  struct child_info *c_info = find_child_info_by_tid(tid);
+  struct wait_info *w_info = create_wait_info();
+  
+  w_info->waiter_thread = curr;
+  w_info->waitee_tid = tid;
+  w_info->status = -2;
+
+  list_push_back(&wait_list, &w_info->elem);
+  thread_block();
+  intr_set_level(old_level);
+
+  list_remove(&c_info->elem);
+  free(c_info);
+  list_remove(&w_info->elem);
+  free(w_info);
+
+  return w_info->status;
 }
 
 /* Free the current process's resources. */
 void
-process_exit (void)
+process_exit (int status)
 {
-  struct thread *curr = thread_current ();
+  struct thread *curr = thread_current();
+  char *file_name = curr->name;
+
+  printf("%s: exit(%d)\n", file_name, status);
+
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  //return to kernel
+  awake_wait_thread(status);
+
+  //free all of the child and files
+  free_child_list();
+  free_file_list();
+
+  intr_set_level(old_level);
+
+  //thread_exit();
+
+  //original code
+  //struct thread *curr = thread_current ();
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
@@ -546,3 +619,97 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
+
+
+
+
+
+////////////////////////////////////////////////////
+static struct child_info *create_child_info() {
+  struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
+  return ptr;
+}
+
+static bool valid_wait_tid(tid_t tid) {
+  struct thread *curr = thread_current();
+  struct list *child_list = &curr->child_list;
+  struct list_elem *e;
+  for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
+    struct child_info *child = list_entry(e, struct child_info, elem);
+    if (tid == child->tid)
+      return true;
+  }
+  return false;
+}
+
+static struct child_info *find_child_info_by_tid(tid_t tid) {
+  struct thread *curr = thread_current();
+  struct list *child_list = &curr->child_list;
+  struct list_elem *e;
+  for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
+    struct child_info *c_info = list_entry(e, struct child_info, elem);
+    if (c_info->tid == tid) return c_info;
+  }
+  return NULL;
+}
+
+static struct wait_info *create_wait_info() {
+  struct wait_info *ptr = (struct wait_info *) malloc (sizeof(struct wait_info));
+  return ptr;
+}
+
+static void awake_wait_thread(int status) {
+  struct list_elem *e;
+  tid_t curr_tid = thread_current()->tid;
+
+  for (e = list_begin(&wait_list); e != list_end(&wait_list); ) {
+    struct wait_info *w_info = list_entry(e, struct wait_info, elem);
+    if (w_info->waitee_tid == curr_tid) {
+      w_info->status = status;
+      thread_unblock(w_info->waiter_thread);
+      list_remove(&w_info->elem);
+    }
+    e = list_next(e);
+  }
+}
+
+static void free_child_list() {
+  struct thread *curr = thread_current();
+  struct list *child_list = &curr->child_list;
+  
+  while(!list_empty(child_list)) {
+    struct list_elem *e = list_pop_front(child_list);
+    struct child_info *c_info = list_entry(e, struct child_info, elem);
+    free(c_info);
+  }
+}
+
+static void free_file_list() {
+  struct thread *curr = thread_current();
+  struct list *file_list = &curr->file_list;
+
+  while(!list_empty(file_list)) {
+    struct list_elem *e = list_pop_front(file_list);
+    struct file_info *f_info = list_entry(e, struct file_info, elem);
+    free(f_info);
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
