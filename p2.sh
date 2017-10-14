@@ -17,48 +17,55 @@ case $1 in
   "clean")
     make clean
     break;;
+  
   "check")
     make grade
     vi grade
     break;;
+  
   "args")
     for ((i=0;i<${#args[@]};i++)); do
       echo "$pintos${args[$i]} -a ${args[$i]} -- -q -f run '${args[$i]} ${argv[$i]}'"
     $pintos${args[$i]} -a ${args[$i]} -- -q -f run ${args[$i]} ${argv[$i]}
     done
     break;;
+  
   "create")
     for create in "${create[@]}"; do
       echo "$pintos$create -a $create -- -q -f run $create"
       $pintos$create -a $create -- -q -f run $create
     done
     break;;
+  
   "open")
     for open in "${open[@]}"; do
       echo "$pintos$open -a $open $sample -- -q -f run $open"
       $pintos$open -a $open $sample -- -q -f run $open
     done
     break;;
+  
   "close")
     for close in "${close[@]}"; do
       echo "$pintos$close -a $close $sample -- -q -f run $close"
       $pintos$close -a $close $sample -- -q -f run $close
     done
     break;;
+  
   "write")
     for write in "${write[@]}"; do
       echo "$pintos$write -a $write $sample -- -q -f run $write"
       $pintos$write -a $write $sample -- -q -f run $write
     done
     break;;
+
   "read")
     for read in "${read[@]}"; do
       echo "$pintos$read -a $read $sample -- -q -f run $read"
       $pintos$read -a $read $sample -- -q -f run $read
     done
     break;;
+  
   "exec")
-
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-once -a exec-once -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-once"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-once -a exec-once -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-once
 
@@ -74,6 +81,7 @@ case $1 in
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr
     break;;
+  
   "wait")
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-simple -a wait-simple -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-simple"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-simple -a wait-simple -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-simple
@@ -90,6 +98,7 @@ case $1 in
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'
     break;;
+  
   "sc")
     echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-arg -a sc-bad-arg -- -q -f run sc-bad-arg"
     pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-arg -a sc-bad-arg -- -q -f run sc-bad-arg
@@ -102,6 +111,17 @@ case $1 in
 
     echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary-2 -a sc-boundary-2 -- -q -f run sc-boundary-2"
     pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary-2 -a sc-boundary-2 -- -q -f run sc-boundary-2
+    break;;
+
+  "rox")
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-simple -a rox-simple -- -q -f run rox-simple"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-simple -a rox-simple -- -q -f run rox-simple
+
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-child -a rox-child -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-child"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-child -a rox-child -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-child
+
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-multichild -a rox-multichild -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-multichild"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-multichild -a rox-multichild -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-multichild
     break;;
   *)
     echo "$pintos$1 -a $1 -- -q -f run $1"

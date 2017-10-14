@@ -2,6 +2,7 @@
 #define USERPROG_SYSCALL_H
 
 #include "threads/thread.h"
+#include "threads/synch.h"
 #include <list.h>
 
 void syscall_init (void);
@@ -19,6 +20,9 @@ int write(int, const char *, size_t);	//done
 void seek(int, unsigned);				//maybe done
 unsigned tell(int);						//maybe done
 void close(int);						//done
+
+struct lock filesys_lock;
+struct file_info *find_file_info_by_fd(int);
 /*
 struct file_info {
     int fd;

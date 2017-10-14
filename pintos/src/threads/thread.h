@@ -102,6 +102,7 @@ struct thread
 
     struct list file_list;              /* list of file_info */
     struct list child_list;             /* list of child_info */
+    struct file *file;                  /* current thread file */
     //int loaded;                        
   };
 

@@ -67,7 +67,10 @@ process_execute (const char *file_name)
   struct child_info *child = create_child_info();
   struct wait_info *l_w_info = create_wait_info();
 
+  lock_acquire(&filesys_lock);
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
+  lock_release(&filesys_lock);
+
   child->tid = tid;
 
   l_w_info->waiter_thread = curr;
@@ -189,22 +192,13 @@ process_wait (tid_t tid)
 void
 process_exit (void)
 {
-  //enum intr_level old_level;
-  //old_level = intr_disable();
-
   struct thread *curr = thread_current();
-  
-  //free all of the child and files
-  // free_child_list();
-  // free_file_list();
 
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = curr->pagedir;
-
-  //intr_set_level(old_level);
 
   if (pd != NULL) 
     {
@@ -352,7 +346,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  
   file = filesys_open (argv[0]);
+  t->file = file;
+  //int fd = open(argv[0]);
+  //file = find_file_info_by_fd(fd);
+  file_deny_write(file);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
@@ -441,7 +441,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);
 
   free(fn);
   free(argv);

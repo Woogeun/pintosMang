@@ -42,13 +42,12 @@ static struct file_info *create_file_info(void);
 //static void remove_file_info(struct file_info *);
 static int get_fd(struct list *);
 static bool cmp_fd(const struct list_elem *, const struct list_elem *, void *);
-static struct file_info *find_file_info_by_fd(int);
+struct file_info *find_file_info_by_fd(int);
 //static struct child_info *find_child_info_by_tid(tid_t);
 static void free_child_list(void);
 static void free_file_list(void);
 
 //static struct list wait_list;
-struct lock filesys_lock;
 
 void
 syscall_init (void) 
@@ -99,64 +98,28 @@ void exit(int status) {
   	free_file_list();
 
   	awake_wait_thread(status);
+
+  	struct file *file = curr->file;
+  
+  	if (file != NULL) {
+  		lock_acquire(&filesys_lock);
+  		file_allow_write(file);
+  		lock_release(&filesys_lock);
+  	}
+
 	thread_exit();
 }
 
 tid_t exec(const char *cmd_line) {
 
-
-	//printf("exec!!!!!!!!!!!!!!!!=====================: %s\n", cmd_line);
-	
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
 
-/*
-	//set child process information
-	struct thread *curr = thread_current();
-	struct child_info *child = create_child_info();
-	tid_t tid = process_execute(cmd_line);
-
-	child->tid = tid;
-
-	list_push_back(&curr->child_list, &child->elem);
-	
-	int status = wait(tid);
-	if (status == -1)
-		return -1;
-
-	return tid;
-	*/
 	tid_t tid = process_execute(cmd_line);
 	return tid;
 }
 
 int wait(tid_t tid) {
-	/*
-	if (!valid_wait_tid(tid)) 
-		return -1;
-
-	enum intr_level old_level;
-	old_level = intr_disable();
-
-	struct thread *curr = thread_current();
-	struct child_info *c_info = find_child_info_by_tid(tid);
-	struct wait_info *w_info = create_wait_info();
-	
-	w_info->waiter_thread = curr;
-	w_info->waitee_tid = tid;
-	w_info->status = -2;
-
-	list_push_back(&wait_list, &w_info->elem);
-	thread_block();
-	intr_set_level(old_level);
-
-	list_remove(&c_info->elem);
-	remove_child_info(c_info);
-	list_remove(&w_info->elem);
-	remove_wait_info(w_info);
-
-	return w_info->status;
-	*/
 	int status = process_wait(tid);
 	return status;
 }
@@ -205,16 +168,13 @@ int open(const char *file_name) {
 	lock_acquire(&filesys_lock);
 	file = filesys_open(file_name);
 	lock_release(&filesys_lock);
-
-	//printf("file::::::::::::0x%x\n", file);
-	if (file == NULL) {
-		//printf("filesys_open fail::::::::::::::::::::\n");
+	
+	if (file == NULL)
 		return -1;
-	}
 
 	struct file_info *f_info = create_file_info();
 	fd = get_fd(&curr->file_list);
-
+	
 	f_info->fd = fd;
 	f_info->file = file;
 	f_info->position = 0;
@@ -324,6 +284,12 @@ void close(int fd) {
 	}
 
 	struct file_info *f_info = find_file_info_by_fd(fd);
+
+	lock_acquire(&filesys_lock);
+	file_close(f_info->file);
+	lock_release(&filesys_lock);
+
+
 	if (f_info != NULL) {
 		list_remove(&f_info->elem);
 		free(f_info);
@@ -453,7 +419,7 @@ static bool cmp_fd(const struct list_elem *a, const struct list_elem *b, void *a
 	return true;
 }
 
-static struct file_info *find_file_info_by_fd(int fd) {
+struct file_info *find_file_info_by_fd(int fd) {
 	struct thread *curr = thread_current();
 	struct list *file_list = &curr->file_list;
 	struct list_elem *e;
@@ -495,6 +461,8 @@ static void free_file_list() {
 	while(!list_empty(file_list)) {
 		struct list_elem *e = list_pop_front(file_list);
 		struct file_info *f_info = list_entry(e, struct file_info, elem);
+
+		//close(f_info->file);
 		list_remove(&f_info->elem);
 		free(f_info);
 	}
