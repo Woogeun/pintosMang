@@ -22,6 +22,7 @@ unsigned tell(int);						//maybe done
 void close(int);						//done
 
 struct lock filesys_lock;
+struct lock free_lock;
 struct file_info *find_file_info_by_fd(int);
 /*
 struct file_info {

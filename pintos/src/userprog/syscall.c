@@ -54,6 +54,7 @@ syscall_init (void)
 {
 	//list_init(&wait_list);
 	lock_init(&filesys_lock);
+	lock_init(&free_lock);
   	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -88,14 +89,21 @@ void halt() {
 }
 
 void exit(int status) {
-	
+
+	//printf("<<1>>\n");
+	lock_acquire(&free_lock);
+	//printf("<<2>>\n");
+
 	struct thread *curr = thread_current();
 	char *file_name = curr->name;
 
 	printf("%s: exit(%d)\n", file_name, status);
 
+	//printf("<<3>>\n");
 	free_child_list();
+	//printf("<<3.5>>\n");
   	free_file_list();
+  	//printf("<<4>>\n");
 
   	awake_wait_thread(status);
 
@@ -106,6 +114,13 @@ void exit(int status) {
   		file_allow_write(file);
   		lock_release(&filesys_lock);
   	}
+
+  	ASSERT(list_empty(&curr->child_list));
+  	ASSERT(list_empty(&curr->file_list));
+
+  	//printf("<<5>>\n");
+  	lock_release(&free_lock);
+  	//printf("<<6>>\n");
 
 	thread_exit();
 }
@@ -296,17 +311,16 @@ void close(int fd) {
 	//lock_acquire(&f_info->lock);
 	struct file_info *f_info = find_file_info_by_fd(fd);
 
-	// lock_acquire(&filesys_lock);
-	// file_close(f_info->file);
-	// lock_release(&filesys_lock);
-
 	if (f_info != NULL) {
-		
+
+		lock_acquire(&filesys_lock);
+		file_close(f_info->file);
+		lock_release(&filesys_lock);
+
 		list_remove(&f_info->elem);
-		//lock_release(&f_info->lock);
 		free(f_info);
 	} else {
-		//lock_release(&f_info->lock);
+
 		exit(-1);
 	}
 }
@@ -459,10 +473,11 @@ static struct child_info *find_child_info_by_tid(tid_t tid) {
 static void free_child_list() {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
-	
+
 	while(!list_empty(child_list)) {
 		struct list_elem *e = list_pop_front(child_list);
 		struct child_info *c_info = list_entry(e, struct child_info, elem);
+
 		list_remove(&c_info->elem);
 		free(c_info);
 	}
@@ -471,12 +486,15 @@ static void free_child_list() {
 static void free_file_list() {
 	struct thread *curr = thread_current();
 	struct list *file_list = &curr->file_list;
-
+	
 	while(!list_empty(file_list)) {
 		struct list_elem *e = list_pop_front(file_list);
 		struct file_info *f_info = list_entry(e, struct file_info, elem);
 
-		//close(f_info->file);
+		lock_acquire(&filesys_lock);
+		file_close(f_info->file);
+		lock_release(&filesys_lock);
+
 		list_remove(&f_info->elem);
 		free(f_info);
 	}
