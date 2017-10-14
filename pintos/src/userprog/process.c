@@ -25,17 +25,6 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-static struct child_info *create_child_info(void);
-static bool is_child(tid_t);
-static struct wait_info *find_wait_info_by_child_tid(tid_t);
-static struct child_info *find_child_info_by_tid(tid_t);
-static struct wait_info *create_wait_info(void);
-static void awake_wait_thread(int);
-//static void free_child_list(void);
-//static void free_file_list(void);
-//void remove_file_info(struct file_info *);
-
-//struct list wait_list;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -44,8 +33,6 @@ static void awake_wait_thread(int);
 tid_t
 process_execute (const char *file_name) 
 {
-  //printf("<<1>>\n");
-
   char *fn_copy;
   tid_t tid;
 
@@ -64,18 +51,13 @@ process_execute (const char *file_name)
   strlcpy(fn, file_name, fn_len + 1);
   fn = strtok_r(fn, " ", &tmp);
 
-  //printf("<<2>>\n");
   //set child process information
   struct thread *curr = thread_current();
-  //struct child_info *c_info = create_child_info();
   struct wait_info *w_info = create_wait_info();
 
   lock_acquire(&filesys_lock);
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   lock_release(&filesys_lock);
-
-  //c_info->tid = tid;
-  //c_info->status = INT_MAX;
 
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
@@ -83,31 +65,23 @@ process_execute (const char *file_name)
   w_info->loaded = LOADING;
   w_info->is_running = WAIT_RUNNING;
 
-  //printf("<<3>>\n");
-  //list_push_back(&curr->child_list, &c_info->elem);
+  lock_acquire(&wait_lock);
   list_push_back(&wait_list, &w_info->elem);
+  lock_release(&wait_lock);
   
-  while(w_info->loaded == LOADING){
-    //printf(" ");
+  while(w_info->loaded == LOADING)
     thread_yield();
-  }
 
-  //list_remove(&w_info->elem);
-  //free(w_info);
   free(fn);
 
-  if (w_info->loaded == LOAD_FAIL){
-    //list_remove(&c_info->elem);
-    //free(c_info);
-    //printf("<<5>>\n");
+  if (w_info->loaded == LOAD_FAIL)
     tid = -1;
-
-  } else {
-    //printf("<<4>>\n");
+  
+  else {
     struct child_info *c_info = create_child_info();
     c_info->tid = tid;
     list_push_back(&curr->child_list, &c_info->elem);
-  /* Create a new thread to execute FILE_NAME. */
+
     if (tid == TID_ERROR)
       palloc_free_page (fn_copy); 
   }
@@ -140,7 +114,6 @@ start_process (void *f_name)
   } else {
     w_info->loaded = LOAD_SUCCESS;
     thread_yield();
-    //thread_current()->loaded = 1;
   }
 
   /* Start the user process by simulating a return from an
@@ -166,9 +139,6 @@ start_process (void *f_name)
 int
 process_wait (tid_t tid) 
 {
-  //while(true);
-  //return -1;
-
   enum intr_level old_level;
   old_level = intr_disable();
 
@@ -178,26 +148,15 @@ process_wait (tid_t tid)
   //check whether already tid is terminated, or already waited
   struct thread *curr = thread_current();
   struct wait_info *w_info = find_wait_info_by_child_tid(tid);
-  //struct child_info *c_info = find_child_info_by_tid(tid);
+
   if (w_info->is_running == WAIT_FINISHED){
-    //printf("wait_finished\n");
     w_info->is_running = WAIT_ALREADY;
     return w_info->status;
   }
-  if (w_info->is_running == WAIT_ALREADY) {
-    //printf("wait_already\n");
+  if (w_info->is_running == WAIT_ALREADY) 
     return -1;
-  }
-
-  
-  //child is running yet
-  //c_info = find_child_info_by_tid(tid);
-  //struct wait_info *w_info = create_wait_info();
-  //w_info = create_wait_info();
 
 
-  //process is running
-  //printf("wait_running\n");
   ASSERT(w_info->is_running == WAIT_RUNNING);
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
@@ -205,13 +164,7 @@ process_wait (tid_t tid)
   w_info->loaded = LOAD_SUCCESS;
   w_info->is_running = WAIT_ALREADY;
 
-  //list_push_back(&wait_list, &w_info->elem);
   thread_block();
-
-  //list_remove(&c_info->elem);
-  //free(c_info);
-  //list_remove(&w_info->elem);
-  //free(w_info);
 
   intr_set_level(old_level);
   
@@ -471,7 +424,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  //file_close (file);
 
   free(fn);
   free(argv);
@@ -610,7 +562,7 @@ setup_stack (void **esp, int argc, char **argv)
 
   for (i = argc-1; i >= 0; i--) {
     len = strlen(argv[i]);
-    *esp -= len + 1;
+    *esp -= len + 1; if (((int) *esp) > 0x8048000) return false;
     addresses[i] = memcpy(*esp, argv[i], len + 1);
   }
 
@@ -618,29 +570,29 @@ setup_stack (void **esp, int argc, char **argv)
   int align = (int) *esp % 4;
   if (align < 0)
     align += 4;
-  *esp -= align;
+  *esp -= align; if (((int) *esp) > 0x8048000) return false;
   memset(*esp, 0, align);
 
   //set imaginary argument
-  *esp -= sizeof(int);
+  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
   memset(*esp, 0, sizeof(int));
 
   for (i = argc - 1; i >= 0; i--) {
-    *esp -= sizeof(int);
+    *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
     memcpy(*esp, &addresses[i], sizeof(int));
   }
 
   //push argv address
   int argv_address = (int) *esp;
-  *esp -= sizeof(int);
+  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
   memcpy(*esp, &argv_address, sizeof(int));
 
   //push argc
-  *esp -= sizeof(int);
+  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
   memcpy(*esp, &argc, sizeof(int));
 
   //push return address zero
-  *esp -= sizeof(int);
+  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
   memset(*esp, 0, sizeof(int));
 
   free(addresses);
@@ -666,89 +618,6 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-
-
-
-
-
-
-////////////////////////////////////////////////////
-static struct child_info *create_child_info() {
-  struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
-  return ptr;
-}
-
-static bool is_child(tid_t tid) {
-  struct child_info *c_info = find_child_info_by_tid(tid);
-  if (c_info == NULL) return false;
-  return true;
-}
-
-static struct wait_info *find_wait_info_by_child_tid(tid_t tid) {
-  struct list_elem *e;
-  for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
-    struct wait_info *w_info = list_entry(e, struct wait_info, elem);
-    if (w_info->waitee_tid == tid) return w_info;
-  }
-  return NULL;
-}
-
-static struct child_info *find_child_info_by_tid(tid_t tid) {
-  struct thread *curr = thread_current();
-  struct list *child_list = &curr->child_list;
-  struct list_elem *e;
-  for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
-    struct child_info *c_info = list_entry(e, struct child_info, elem);
-    if (c_info->tid == tid) return c_info;
-  }
-  return NULL;
-}
-
-static struct wait_info *create_wait_info() {
-  struct wait_info *ptr = (struct wait_info *) malloc (sizeof(struct wait_info));
-  return ptr;
-}
-
-static void awake_wait_thread(int status) {
-  struct list_elem *e;
-  tid_t curr_tid = thread_current()->tid;
-
-  for (e = list_begin(&wait_list); e != list_end(&wait_list); ) {
-    struct wait_info *w_info = list_entry(e, struct wait_info, elem);
-    if (w_info->waitee_tid == curr_tid) {
-      //printf("awake!!!!!!!!!!!!  %d\n", curr_tid);
-      w_info->status = status;
-      thread_unblock(w_info->waiter_thread);
-      list_remove(&w_info->elem);
-    }
-    e = list_next(e);
-  }
-}
-/*
-static void free_child_list() {
-  struct thread *curr = thread_current();
-  struct list *child_list = &curr->child_list;
-  
-  while(!list_empty(child_list)) {
-    struct list_elem *e = list_pop_front(child_list);
-    struct child_info *c_info = list_entry(e, struct child_info, elem);
-    free(c_info);
-  }
-}
-
-static void free_file_list() {
-  struct thread *curr = thread_current();
-  struct list *file_list = &curr->file_list;
-
-  while(!list_empty(file_list)) {
-    struct list_elem *e = list_pop_front(file_list);
-    struct file_info *f_info = list_entry(e, struct file_info, elem);
-    free(f_info);
-  }
-}
-*/
-
-
 
 
 

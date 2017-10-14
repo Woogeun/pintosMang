@@ -9,13 +9,15 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+//shared memory
 struct list wait_list;
-struct list load_wait_list;
+struct lock wait_lock;
 
 enum process_status {
 	WAIT_FINISHED,
 	WAIT_RUNNING,
 	WAIT_ALREADY,
+	
 	LOADING,
 	LOAD_SUCCESS,
 	LOAD_FAIL
@@ -26,7 +28,6 @@ struct file_info {
     struct file *file;
     int position;
     struct list_elem elem;
-    struct lock lock;
 };
 
 struct wait_info {
@@ -41,7 +42,6 @@ struct wait_info {
 
 struct child_info {
     tid_t tid;			
-    //int loaded; 			/* 0: not yet loaded, 1: loaded successfully, -1: load failure */
     struct list_elem elem;
 };
 

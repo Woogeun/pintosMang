@@ -1,6 +1,9 @@
 #!/bin/bash
-cd ./pintos/src/userprog/build
+
+cd ./pintos/src/userprog
+make clean
 make
+cd ./build
 
 pintos="pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/"
 sample="-p ../../tests/userprog/sample.txt -a sample.txt"
