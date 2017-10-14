@@ -178,6 +178,7 @@ int open(const char *file_name) {
 	f_info->fd = fd;
 	f_info->file = file;
 	f_info->position = 0;
+	lock_init(&f_info->lock);
 	
 	list_insert_ordered(&curr->file_list, &f_info->elem, &cmp_fd, NULL);
 	
@@ -190,7 +191,7 @@ int filesize(int fd) {
 	if (f_info == NULL)
 		exit(-1);
 	int size = 0;
-
+	
 	lock_acquire(&filesys_lock);
 	size = file_length(f_info->file);
 	lock_release(&filesys_lock);
@@ -199,6 +200,8 @@ int filesize(int fd) {
 }
 
 int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
+	//printf("I`m read syscall-------------------------\n");
+	//lock_acquire(&filesys_lock);
 	if (!valid_address((void *) buffer)) {
 		if ((unsigned) buffer < 0xc0000000) {
 			uint32_t *pd = active_pd();
@@ -210,6 +213,7 @@ int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
 
 	//stdin
 	if (fd == 0) {
+		//lock_release(&filesys_lock);
 		return input_getc();
 	}
 
@@ -217,11 +221,13 @@ int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
 	if (fd == 1) 
 		exit(-1);
 
+	
 	//ordinary file
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL) 
 		exit(-1);
 
+	//lock_acquire(&f_info->lock);
 	lock_acquire(&filesys_lock);
 	size = file_read(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
@@ -230,6 +236,8 @@ int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
 }
 
 int write(int fd, const char *buffer, size_t size) {
+	//printf("I`m write syscall-------------------------\n");
+	
 	if (!valid_address((void *) buffer))
 		exit(-1);
 
@@ -240,6 +248,7 @@ int write(int fd, const char *buffer, size_t size) {
 	//stdout
 	if (fd == 1) {
 		putbuf(buffer, size);
+		//lock_release(&filesys_lock);
 		return size;
 	}
 
@@ -248,10 +257,11 @@ int write(int fd, const char *buffer, size_t size) {
 	if (f_info == NULL)
 		exit(-1);
 
+	//lock_acquire(&f_info->lock);
 	lock_acquire(&filesys_lock);
 	size = file_write(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
-
+	//printf("write lock release================\n");
 	return size;
 }
 
@@ -279,21 +289,24 @@ unsigned tell(int fd) {
 }
 
 void close(int fd) {
-	if (fd == 0 || fd == 1) {
+	//printf("I`m close syscall-------------------------\n");
+	if (fd == 0 || fd == 1) 
 		exit(-1);
-	}
 
+	//lock_acquire(&f_info->lock);
 	struct file_info *f_info = find_file_info_by_fd(fd);
 
 	// lock_acquire(&filesys_lock);
 	// file_close(f_info->file);
 	// lock_release(&filesys_lock);
 
-
 	if (f_info != NULL) {
+		
 		list_remove(&f_info->elem);
+		//lock_release(&f_info->lock);
 		free(f_info);
 	} else {
+		//lock_release(&f_info->lock);
 		exit(-1);
 	}
 }
@@ -341,14 +354,15 @@ static void awake_wait_thread(int status) {
 	enum intr_level old_level;
 	old_level = intr_disable();
 
-	for (e = list_begin(&wait_list); e != list_end(&wait_list); ) {
+	for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
 		struct wait_info *w_info = list_entry(e, struct wait_info, elem);
 		if (w_info->waitee_tid == curr_tid) {
 			w_info->status = status;
-			thread_unblock(w_info->waiter_thread);
-			list_remove(&w_info->elem);
+			//printf("w_info in awake: %d\n", w_info->is_running);
+			if (w_info->is_running == WAIT_RUNNING) w_info->is_running = WAIT_FINISHED;
+			if (w_info->waiter_thread->status == THREAD_BLOCKED)
+				thread_unblock(w_info->waiter_thread);
 		}
-		e = list_next(e);
 	}
 
 	intr_set_level(old_level);

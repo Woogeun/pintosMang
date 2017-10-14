@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <list.h>
+#include <limits.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -25,7 +26,7 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 static struct child_info *create_child_info(void);
-static bool valid_wait_tid(tid_t);
+static bool is_child(tid_t);
 static struct wait_info *find_wait_info_by_child_tid(tid_t);
 static struct child_info *find_child_info_by_tid(tid_t);
 static struct wait_info *create_wait_info(void);
@@ -43,6 +44,7 @@ static void awake_wait_thread(int);
 tid_t
 process_execute (const char *file_name) 
 {
+  //printf("<<1>>\n");
 
   char *fn_copy;
   tid_t tid;
@@ -62,39 +64,49 @@ process_execute (const char *file_name)
   strlcpy(fn, file_name, fn_len + 1);
   fn = strtok_r(fn, " ", &tmp);
 
+  //printf("<<2>>\n");
   //set child process information
   struct thread *curr = thread_current();
-  struct child_info *child = create_child_info();
-  struct wait_info *l_w_info = create_wait_info();
+  //struct child_info *c_info = create_child_info();
+  struct wait_info *w_info = create_wait_info();
 
   lock_acquire(&filesys_lock);
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   lock_release(&filesys_lock);
 
-  child->tid = tid;
+  //c_info->tid = tid;
+  //c_info->status = INT_MAX;
 
-  l_w_info->waiter_thread = curr;
-  l_w_info->waitee_tid = tid;
-  l_w_info->status = 0;
+  w_info->waiter_thread = curr;
+  w_info->waitee_tid = tid;
+  w_info->status = INT_MAX;
+  w_info->loaded = LOADING;
+  w_info->is_running = WAIT_RUNNING;
 
-  list_push_back(&curr->child_list, &child->elem);
-  list_push_back(&load_wait_list, &l_w_info->elem);
+  //printf("<<3>>\n");
+  //list_push_back(&curr->child_list, &c_info->elem);
+  list_push_back(&wait_list, &w_info->elem);
   
-  while(l_w_info->status == 0)
+  while(w_info->loaded == LOADING){
+    //printf(" ");
     thread_yield();
+  }
 
-  int loaded = l_w_info->status;
-
-  list_remove(&l_w_info->elem);
-  free(l_w_info);
+  //list_remove(&w_info->elem);
+  //free(w_info);
   free(fn);
 
-  if (loaded == -1){
-    list_remove(&child->elem);
-    free(child);
+  if (w_info->loaded == LOAD_FAIL){
+    //list_remove(&c_info->elem);
+    //free(c_info);
+    //printf("<<5>>\n");
     tid = -1;
 
   } else {
+    //printf("<<4>>\n");
+    struct child_info *c_info = create_child_info();
+    c_info->tid = tid;
+    list_push_back(&curr->child_list, &c_info->elem);
   /* Create a new thread to execute FILE_NAME. */
     if (tid == TID_ERROR)
       palloc_free_page (fn_copy); 
@@ -120,13 +132,13 @@ start_process (void *f_name)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  struct wait_info *l_w_info = find_wait_info_by_child_tid(thread_current()->tid);
+  struct wait_info *w_info = find_wait_info_by_child_tid(thread_current()->tid);
   palloc_free_page (file_name);
   if (!success) {
-    l_w_info->status = -1;
+    w_info->loaded = LOAD_FAIL;
     exit(-1);
   } else {
-    l_w_info->status = 1;
+    w_info->loaded = LOAD_SUCCESS;
     thread_yield();
     //thread_current()->loaded = 1;
   }
@@ -157,35 +169,54 @@ process_wait (tid_t tid)
   //while(true);
   //return -1;
 
-  if (!valid_wait_tid(tid)) 
-    return -1;
-
   enum intr_level old_level;
   old_level = intr_disable();
 
-  struct thread *curr = thread_current();
-  struct child_info *c_info = find_child_info_by_tid(tid);
-  struct wait_info *w_info = create_wait_info();
-  int status;
+  if (!is_child(tid))
+    return -1;
 
+  //check whether already tid is terminated, or already waited
+  struct thread *curr = thread_current();
+  struct wait_info *w_info = find_wait_info_by_child_tid(tid);
+  //struct child_info *c_info = find_child_info_by_tid(tid);
+  if (w_info->is_running == WAIT_FINISHED){
+    //printf("wait_finished\n");
+    w_info->is_running = WAIT_ALREADY;
+    return w_info->status;
+  }
+  if (w_info->is_running == WAIT_ALREADY) {
+    //printf("wait_already\n");
+    return -1;
+  }
+
+  
+  //child is running yet
+  //c_info = find_child_info_by_tid(tid);
+  //struct wait_info *w_info = create_wait_info();
+  //w_info = create_wait_info();
+
+
+  //process is running
+  //printf("wait_running\n");
+  ASSERT(w_info->is_running == WAIT_RUNNING);
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
-  w_info->status = -2;
+  w_info->status = INT_MAX;
+  w_info->loaded = LOAD_SUCCESS;
+  w_info->is_running = WAIT_ALREADY;
 
-  list_push_back(&wait_list, &w_info->elem);
+  //list_push_back(&wait_list, &w_info->elem);
   thread_block();
 
-  status = w_info->status;
-
-  list_remove(&c_info->elem);
-  free(c_info);
-  list_remove(&w_info->elem);
-  free(w_info);
+  //list_remove(&c_info->elem);
+  //free(c_info);
+  //list_remove(&w_info->elem);
+  //free(w_info);
 
   intr_set_level(old_level);
   
 
-  return status;
+  return w_info->status;
 }
 
 /* Free the current process's resources. */
@@ -354,7 +385,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
-    
+
   t->file = file;
   file_deny_write(file);
 
@@ -647,7 +678,7 @@ static struct child_info *create_child_info() {
   return ptr;
 }
 
-static bool valid_wait_tid(tid_t tid) {
+static bool is_child(tid_t tid) {
   struct child_info *c_info = find_child_info_by_tid(tid);
   if (c_info == NULL) return false;
   return true;
@@ -655,9 +686,9 @@ static bool valid_wait_tid(tid_t tid) {
 
 static struct wait_info *find_wait_info_by_child_tid(tid_t tid) {
   struct list_elem *e;
-  for (e = list_begin(&load_wait_list); e != list_end(&load_wait_list); e = list_next(e)) {
-    struct wait_info *l_w_info = list_entry(e, struct wait_info, elem);
-    if (l_w_info->waitee_tid == tid) return l_w_info;
+  for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
+    struct wait_info *w_info = list_entry(e, struct wait_info, elem);
+    if (w_info->waitee_tid == tid) return w_info;
   }
   return NULL;
 }

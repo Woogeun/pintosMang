@@ -123,9 +123,21 @@ case $1 in
     echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-multichild -a rox-multichild -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-multichild"
     pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/rox-multichild -a rox-multichild -p ./tests/userprog/child-rox -a child-rox -- -q -f run rox-multichild
     break;;
+
+  "syn")
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/filesys/base/syn-read -a syn-read -p tests/filesys/base/child-syn-read -a child-syn-read -- -q   -f run syn-read"
+    pintos -v -k -T 300 --qemu  --fs-disk=2 -p tests/filesys/base/syn-read -a syn-read -p tests/filesys/base/child-syn-read -a child-syn-read -- -q   -f run syn-read
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/filesys/base/syn-write -a syn-write -p tests/filesys/base/child-syn-wrt -a child-syn-wrt -- -q   -f run syn-write"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/filesys/base/syn-write -a syn-write -p tests/filesys/base/child-syn-wrt -a child-syn-wrt -- -q   -f run syn-write
+    break;;
+
+  "oom")
+    echo "pintos -v -k -T 360 --qemu  --fs-disk=2 -p tests/userprog/no-vm/multi-oom -a multi-oom -- -q   -f run multi-oom"
+    pintos -v -k -T 360 --qemu  --fs-disk=2 -p tests/userprog/no-vm/multi-oom -a multi-oom -- -q   -f run multi-oom
+    break;;
   *)
-    echo "$pintos$1 -a $1 -- -q -f run $1"
-    $pintos$1 -a $1 -- -q -f run $1;;
+    break;;
 esac
 
 
