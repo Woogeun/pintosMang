@@ -18,7 +18,6 @@ case $1 in
     make clean
     break;;
   "check")
-    make check
     make grade
     vi grade
     break;;
@@ -74,6 +73,22 @@ case $1 in
 
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr
+    break;;
+  "wait")
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-simple -a wait-simple -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-simple"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-simple -a wait-simple -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-simple
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-twice -a wait-twice -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-twice"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-twice -a wait-twice -p tests/userprog/child-simple -a child-simple -- -q   -f run wait-twice
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-killed -a wait-killed -p tests/userprog/child-bad -a child-bad -- -q   -f run wait-killed"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-killed -a wait-killed -p tests/userprog/child-bad -a child-bad -- -q   -f run wait-killed
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-bad-pid -a wait-bad-pid -- -q   -f run wait-bad-pid"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/wait-bad-pid -a wait-bad-pid -- -q   -f run wait-bad-pid
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'"
+    pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'
     break;;
   *)
     echo "$pintos$1 -a $1 -- -q -f run $1"

@@ -2,14 +2,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <syscall-nr.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/init.h" 
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "threads/synch.h"
 #include "userprog/pagedir.h"
-#include <string.h>
 #include "userprog/process.h"
 
 
@@ -33,7 +34,7 @@ static int return_args(struct intr_frame *, int);
 //static bool valid_wait_tid(tid_t);
 //static struct wait_info *create_wait_info(void);
 //static void remove_wait_info(struct wait_info *);
-//static void awake_wait_thread(int);
+static void awake_wait_thread(int);
 //static struct child_info *create_child_info(void);
 //static void remove_child_info(struct child_info *);
 static bool valid_address(const void *);
@@ -43,8 +44,8 @@ static int get_fd(struct list *);
 static bool cmp_fd(const struct list_elem *, const struct list_elem *, void *);
 static struct file_info *find_file_info_by_fd(int);
 //static struct child_info *find_child_info_by_tid(tid_t);
-//static void free_child_list(void);
-//static void free_file_list(void);
+static void free_child_list(void);
+static void free_file_list(void);
 
 //static struct list wait_list;
 struct lock filesys_lock;
@@ -64,7 +65,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-	printf("syscall!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! %d\n", *(int *) f->esp);
+	//printf("syscall!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! %d\n", *(int *) f->esp);
   switch(*(int *) f->esp) {
   	case SYS_HALT: 		halt(); 									break;
   	case SYS_EXIT:		exit(arg1); 								break;
@@ -88,38 +89,27 @@ void halt() {
 }
 
 void exit(int status) {
-	/*
+	
 	struct thread *curr = thread_current();
 	char *file_name = curr->name;
 
 	printf("%s: exit(%d)\n", file_name, status);
 
-	enum intr_level old_level;
-	old_level = intr_disable();
-
-	//return to kernel
-	awake_wait_thread(status);
-
-	//free all of the child and files
 	free_child_list();
-	free_file_list();
+  	free_file_list();
 
-	intr_set_level(old_level);
-
+  	awake_wait_thread(status);
 	thread_exit();
-	*/
-
-	process_exit(status);
 }
 
 tid_t exec(const char *cmd_line) {
 
 
 	//printf("exec!!!!!!!!!!!!!!!!=====================: %s\n", cmd_line);
-	/*
+	
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
-*/
+
 /*
 	//set child process information
 	struct thread *curr = thread_current();
@@ -370,7 +360,7 @@ static bool valid_wait_tid(tid_t tid) {
 	return false;
 }
 */
-/*
+
 static void awake_wait_thread(int status) {
 	struct list_elem *e;
 	tid_t curr_tid = thread_current()->tid;
@@ -390,7 +380,7 @@ static void awake_wait_thread(int status) {
 
 	intr_set_level(old_level);
 }
-*/
+
 /*
 static struct child_info *create_child_info() {
 	struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
@@ -405,7 +395,7 @@ static bool valid_address(const void *address) {
 	uint32_t *pd = active_pd();
 
 	bool valid = pagedir_is_accessed(pd, address);
-	if ((unsigned) address > 0xc0000000) valid = false;
+	if ((unsigned) address > PHYS_BASE) valid = false;
 	//printf("valid address: %x, %d\n", (unsigned) address, valid);
 	return valid; 
 }
@@ -478,7 +468,7 @@ static struct child_info *find_child_info_by_tid(tid_t tid) {
 	return NULL;
 }
 */
-/*
+
 static void free_child_list() {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
@@ -486,7 +476,8 @@ static void free_child_list() {
 	while(!list_empty(child_list)) {
 		struct list_elem *e = list_pop_front(child_list);
 		struct child_info *c_info = list_entry(e, struct child_info, elem);
-		remove_child_info(c_info);
+		list_remove(&c_info->elem);
+		free(c_info);
 	}
 }
 
@@ -497,10 +488,11 @@ static void free_file_list() {
 	while(!list_empty(file_list)) {
 		struct list_elem *e = list_pop_front(file_list);
 		struct file_info *f_info = list_entry(e, struct file_info, elem);
-		remove_file_info(f_info);
+		list_remove(&f_info->elem);
+		free(f_info);
 	}
 }
-*/
+
 
 
 
