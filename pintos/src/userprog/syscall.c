@@ -344,7 +344,14 @@ void close(int fd) {
 
 //////////////////////////
 static int return_args(struct intr_frame *f, int order) {
-	return (int) *(((int *) f->esp) + order);
+	int *address = ((int *) f->esp) + order;
+	if (!valid_address(address)){
+		//printf("invalid args==================================\n");
+		exit(-1);
+	}
+	int arg = *address;
+	
+	return arg;
 }
 
 /*

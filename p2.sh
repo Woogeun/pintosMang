@@ -90,6 +90,19 @@ case $1 in
     echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/multi-recurse -a multi-recurse -- -q   -f run 'multi-recurse 15'
     break;;
+  "sc")
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-arg -a sc-bad-arg -- -q -f run sc-bad-arg"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-arg -a sc-bad-arg -- -q -f run sc-bad-arg
+
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-sp -a sc-bad-sp -- -q -f run sc-bad-sp"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-bad-sp -a sc-bad-sp -- -q -f run sc-bad-sp
+
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary -a sc-boundary -- -q -f run sc-boundary"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary -a sc-boundary -- -q -f run sc-boundary
+
+    echo "pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary-2 -a sc-boundary-2 -- -q -f run sc-boundary-2"
+    pintos -v -k -T 3 --qemu --fs-disk=2 -p tests/userprog/sc-boundary-2 -a sc-boundary-2 -- -q -f run sc-boundary-2
+    break;;
   *)
     echo "$pintos$1 -a $1 -- -q -f run $1"
     $pintos$1 -a $1 -- -q -f run $1;;
