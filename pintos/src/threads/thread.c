@@ -92,6 +92,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&wait_list);
+  list_init (&load_wait_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -442,7 +443,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  t->wait_thread = NULL;
   list_init(&t->child_list);
   list_init(&t->file_list);
 }

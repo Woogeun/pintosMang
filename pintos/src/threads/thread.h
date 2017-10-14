@@ -100,9 +100,9 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    struct thread *wait_thread;
     struct list file_list;              /* list of file_info */
     struct list child_list;             /* list of child_info */
+    //int loaded;                        
   };
 
 

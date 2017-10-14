@@ -25,6 +25,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 static struct child_info *create_child_info(void);
 static bool valid_wait_tid(tid_t);
+static struct wait_info *find_wait_info_by_child_tid(tid_t);
 static struct child_info *find_child_info_by_tid(tid_t);
 static struct wait_info *create_wait_info(void);
 static void awake_wait_thread(int);
@@ -32,7 +33,7 @@ static void free_child_list(void);
 static void free_file_list(void);
 //void remove_file_info(struct file_info *);
 
-struct list wait_list;
+//struct list wait_list;
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -62,26 +63,42 @@ process_execute (const char *file_name)
   //set child process information
   struct thread *curr = thread_current();
   struct child_info *child = create_child_info();
+  struct wait_info *l_w_info = create_wait_info();
+
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
-
   child->tid = tid;
+
+  l_w_info->waiter_thread = curr;
+  l_w_info->waitee_tid = tid;
+  l_w_info->status = 0;
+
   list_push_back(&curr->child_list, &child->elem);
+  list_push_back(&load_wait_list, &l_w_info->elem);
   
-  int status = process_wait(tid);
 
+  printf("<<1>>\n");
+  while(l_w_info->status == 0)
+    thread_yield();
+  printf("<<2>>\n");
+
+  list_remove(&l_w_info->elem);
+  free(l_w_info);
   free(fn);
-  if (status == -1)
-    return -1;
 
-  //return tid;
+  printf("<<3>>\n");
+  if (l_w_info->status == -1){
+    list_remove(&child->elem);
+    free(child);
+    printf("<<5>>\n");
+    tid = -1;
 
+  } else {
+    printf("<<4>>\n");
   /* Create a new thread to execute FILE_NAME. */
-  
+    if (tid == TID_ERROR)
+      palloc_free_page (fn_copy); 
+  }
 
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-
-  //free(fn);
   return tid;
 }
 
@@ -90,6 +107,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *f_name)
 {
+  printf("<<6>>\n");
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
@@ -103,9 +121,19 @@ start_process (void *f_name)
 
   /* If load failed, quit. */
 
+  printf("<<7>>\n");
+  struct wait_info *l_w_info = find_wait_info_by_child_tid(thread_current()->tid);
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    printf("<<8>>\n");
+    l_w_info->status = -1;
     process_exit (-1);
+  } else {
+    printf("<<9>>\n");
+    l_w_info->status = 1;
+    thread_yield();
+    //thread_current()->loaded = 1;
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -142,21 +170,26 @@ process_wait (tid_t tid)
   struct thread *curr = thread_current();
   struct child_info *c_info = find_child_info_by_tid(tid);
   struct wait_info *w_info = create_wait_info();
-  
+  int status;
+
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
   w_info->status = -2;
 
   list_push_back(&wait_list, &w_info->elem);
   thread_block();
-  intr_set_level(old_level);
+
+  status = w_info->status;
 
   list_remove(&c_info->elem);
   free(c_info);
   list_remove(&w_info->elem);
   free(w_info);
 
-  return w_info->status;
+  intr_set_level(old_level);
+  
+
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -168,16 +201,17 @@ process_exit (int status)
 
   printf("%s: exit(%d)\n", file_name, status);
 
+  printf("<<11>>\n");
   enum intr_level old_level;
   old_level = intr_disable();
 
   //return to kernel
   awake_wait_thread(status);
-
+  printf("<<12>>\n");
   //free all of the child and files
   free_child_list();
   free_file_list();
-
+  printf("<<13>>\n");
   intr_set_level(old_level);
 
   //thread_exit();
@@ -202,6 +236,8 @@ process_exit (int status)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    printf("<<14>>\n");
+    //intr_set_level(old_level);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -641,6 +677,15 @@ static bool valid_wait_tid(tid_t tid) {
       return true;
   }
   return false;
+}
+
+static struct wait_info *find_wait_info_by_child_tid(tid_t tid) {
+  struct list_elem *e;
+  for (e = list_begin(&load_wait_list); e != list_end(&load_wait_list); e = list_next(e)) {
+    struct wait_info *l_w_info = list_entry(e, struct wait_info, elem);
+    if (l_w_info->waitee_tid == tid) return l_w_info;
+  }
+  return NULL;
 }
 
 static struct child_info *find_child_info_by_tid(tid_t tid) {

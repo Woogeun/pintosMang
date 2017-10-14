@@ -64,21 +64,22 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
+	printf("syscall!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! %d\n", *(int *) f->esp);
   switch(*(int *) f->esp) {
-  	case SYS_HALT: 		halt(); break;
-  	case SYS_EXIT:		exit(arg1); break;
-  	case SYS_EXEC:		f->eax = exec((char *) arg1); break;
-  	case SYS_WAIT:		f->eax = wait((tid_t) arg1); break;
-  	case SYS_CREATE:	f->eax = create((char *) arg1, arg2); break;
-  	case SYS_REMOVE:	f->eax = remove((char *) arg1); break;
-  	case SYS_OPEN:		f->eax = open((char *) arg1); break;
-  	case SYS_FILESIZE:	f->eax = filesize(arg1); break;
-  	case SYS_READ:		f->eax = read(arg1, (char *) arg2, arg3); break;
-  	case SYS_WRITE:		f->eax = write(arg1, (char *) arg2, arg3); break;
-  	case SYS_SEEK:		seek(arg1, arg2); break;
-  	case SYS_TELL:		f->eax = tell(arg1); break;
-  	case SYS_CLOSE:		close(arg1); break;
-  	default:	break;
+  	case SYS_HALT: 		halt(); 									break;
+  	case SYS_EXIT:		exit(arg1); 								break;
+  	case SYS_EXEC:		f->eax = exec((char *) arg1); 				break;
+  	case SYS_WAIT:		f->eax = wait((tid_t) arg1); 				break;
+  	case SYS_CREATE:	f->eax = create((char *) arg1, arg2); 		break;
+  	case SYS_REMOVE:	f->eax = remove((char *) arg1); 			break;
+  	case SYS_OPEN:		f->eax = open((char *) arg1); 				break;
+  	case SYS_FILESIZE:	f->eax = filesize(arg1); 					break;
+  	case SYS_READ:		f->eax = read(arg1, (char *) arg2, arg3); 	break;
+  	case SYS_WRITE:		f->eax = write(arg1, (char *) arg2, arg3); 	break;
+  	case SYS_SEEK:		seek(arg1, arg2); 							break;
+  	case SYS_TELL:		f->eax = tell(arg1); 						break;
+  	case SYS_CLOSE:		close(arg1); 								break;
+  	default:														break;
   }
 }
 
@@ -115,9 +116,10 @@ tid_t exec(const char *cmd_line) {
 
 
 	//printf("exec!!!!!!!!!!!!!!!!=====================: %s\n", cmd_line);
+	/*
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
-
+*/
 /*
 	//set child process information
 	struct thread *curr = thread_current();

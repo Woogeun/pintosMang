@@ -59,14 +59,20 @@ case $1 in
     done
     break;;
   "exec")
+
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-once -a exec-once -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-once"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-once -a exec-once -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-once
 
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-arg -a exec-arg -p tests/userprog/child-args -a child-args -- -q   -f run exec-arg"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-arg -a exec-arg -p tests/userprog/child-args -a child-args -- -q   -f run exec-arg
 
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-multiple -a exec-multiple -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-multiple"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-multiple -a exec-multiple -p tests/userprog/child-simple -a child-simple -- -q   -f run exec-multiple
 
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-missing -a exec-missing -- -q   -f run exec-missing"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-missing -a exec-missing -- -q   -f run exec-missing
 
+    echo "pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr"
     pintos -v -k -T 3 --qemu  --fs-disk=2 -p tests/userprog/exec-bad-ptr -a exec-bad-ptr -- -q   -f run exec-bad-ptr
     break;;
   *)

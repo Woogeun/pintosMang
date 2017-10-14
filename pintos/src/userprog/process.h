@@ -9,6 +9,7 @@ void process_exit (int);
 void process_activate (void);
 
 struct list wait_list;
+struct list load_wait_list;
 
 struct file_info {
     int fd;
@@ -26,6 +27,7 @@ struct wait_info {
 
 struct child_info {
     tid_t tid;
+    //int loaded; 			/* 0: not yet loaded, 1: loaded successfully, -1: load failure */
     struct list_elem elem;
 };
 
