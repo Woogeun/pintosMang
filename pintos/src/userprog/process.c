@@ -347,17 +347,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Open executable file. */
   
-  file = filesys_open (argv[0]);
-  t->file = file;
-  //int fd = open(argv[0]);
-  //file = find_file_info_by_fd(fd);
-  file_deny_write(file);
+  file = filesys_open (argv[0]);  
 
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
+    
+  t->file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr

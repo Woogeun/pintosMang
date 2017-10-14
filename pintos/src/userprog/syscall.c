@@ -285,9 +285,9 @@ void close(int fd) {
 
 	struct file_info *f_info = find_file_info_by_fd(fd);
 
-	lock_acquire(&filesys_lock);
-	file_close(f_info->file);
-	lock_release(&filesys_lock);
+	// lock_acquire(&filesys_lock);
+	// file_close(f_info->file);
+	// lock_release(&filesys_lock);
 
 
 	if (f_info != NULL) {
