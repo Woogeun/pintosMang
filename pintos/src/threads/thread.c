@@ -91,6 +91,8 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&wait_list);
+  lock_init (&wait_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -440,6 +442,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  list_init(&t->child_list);
+  list_init(&t->file_list);
+  t->file = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

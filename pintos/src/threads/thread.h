@@ -99,7 +99,12 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    struct list file_list;              /* list of file_info */
+    struct list child_list;             /* list of child_info */
+    struct file *file;                  /* current thread file */           
   };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

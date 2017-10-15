@@ -118,6 +118,7 @@ file_write_at (struct file *file, const void *buffer, off_t size,
 void
 file_deny_write (struct file *file) 
 {
+  //printf(" file_deny_write================================== : 0x%x\n", file);
   ASSERT (file != NULL);
   if (!file->deny_write) 
     {
@@ -132,6 +133,7 @@ file_deny_write (struct file *file)
 void
 file_allow_write (struct file *file) 
 {
+  //printf("file_allow_write================================== : 0x%x\n", file);
   ASSERT (file != NULL);
   if (file->deny_write) 
     {

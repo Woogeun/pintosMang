@@ -123,6 +123,7 @@ main (void)
   /* Finish up. */
   if (power_off_when_done)
     power_off ();
+  free_wait_list();
   thread_exit ();
 }
 
