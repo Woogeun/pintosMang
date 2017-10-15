@@ -35,7 +35,7 @@ syscall_handler (struct intr_frame *f)
   switch(*(int *) f->esp) {
   	case SYS_HALT:		halt(); 									break;
   	case SYS_EXIT:		exit(arg1); 								break;
-  	case SYS_EXEC:		f->eax = exec((char *) arg1); 				break;
+  	case SYS_EXEC:		f->eax = exec((char *) arg1);				break;
   	case SYS_WAIT:		f->eax = wait((tid_t) arg1); 				break;
   	case SYS_CREATE:	f->eax = create((char *) arg1, arg2); 		break;
   	case SYS_REMOVE:	f->eax = remove((char *) arg1); 			break;
@@ -156,7 +156,6 @@ int open(const char *file_name) {
 	list_insert_ordered(&curr->file_list, &f_info->elem, &cmp_fd, NULL);
 	
 	return fd;
-
 }
 
 int filesize(int fd) {
@@ -172,9 +171,9 @@ int filesize(int fd) {
 	return size;
 }
 
-int read(int fd UNUSED, char *buffer, size_t size UNUSED) {
+int read(int fd, char *buffer, size_t size) {
 	if (!valid_address((void *) buffer)) {
-		if ((unsigned) buffer < 0xc0000000) {
+		if ((unsigned) buffer < (unsigned) PHYS_BASE) {
 			uint32_t *pd = active_pd();
 			pagedir_set_dirty(pd, buffer, true);
 		}
