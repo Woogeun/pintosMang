@@ -55,9 +55,7 @@ process_execute (const char *file_name)
   struct thread *curr = thread_current();
   struct wait_info *w_info = create_wait_info();
 
-  lock_acquire(&filesys_lock);
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
-  lock_release(&filesys_lock);
 
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
@@ -176,14 +174,12 @@ process_wait (tid_t tid)
 void
 process_exit (void)
 {
-  struct thread *curr = thread_current();
-
+  struct thread *curr = thread_current ();
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = curr->pagedir;
-
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
@@ -325,14 +321,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL)
+  if (t->pagedir == NULL) 
     goto done;
   process_activate ();
 
   /* Open executable file. */
-  
   file = filesys_open (argv[0]);  
-
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
@@ -560,6 +554,7 @@ setup_stack (void **esp, int argc, char **argv)
   size_t len;
   void **addresses = (void **) malloc(sizeof(void *) * argc);
 
+  //add argv to stack reversely
   for (i = argc-1; i >= 0; i--) {
     len = strlen(argv[i]);
     *esp -= len + 1; if (((int) *esp) > 0x8048000) return false;
@@ -577,6 +572,7 @@ setup_stack (void **esp, int argc, char **argv)
   *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
   memset(*esp, 0, sizeof(int));
 
+  //add argv`s address to the stack 
   for (i = argc - 1; i >= 0; i--) {
     *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
     memcpy(*esp, &addresses[i], sizeof(int));
