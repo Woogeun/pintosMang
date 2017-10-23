@@ -175,7 +175,7 @@ int read(int fd, char *buffer, size_t size) {
 	if (!valid_address((void *) buffer)) {
 		if ((unsigned) buffer < (unsigned) PHYS_BASE) {
 			uint32_t *pd = active_pd();
-			pagedir_set_dirty(pd, buffer, true);
+			pagedir_set_accessed(pd, buffer, true);
 		}
 		else 
 			exit(-1);
