@@ -315,7 +315,7 @@ bool valid_address(const void *address) {
 	uint32_t *pd = active_pd();
 
 	bool valid = pagedir_is_accessed(pd, address);
-	if ((unsigned) address > (unsigned) PHYS_BASE) valid = false;
+	if (!is_user_vaddr(address)) valid = false;
 	return valid; 
 }
 
