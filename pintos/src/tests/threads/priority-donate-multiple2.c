@@ -19,7 +19,6 @@
 #include "threads/init.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-#include <debug.h>
 
 static thread_func a_thread_func;
 static thread_func b_thread_func;
@@ -41,8 +40,6 @@ test_priority_donate_multiple2 (void)
 
   lock_acquire (&a);
   lock_acquire (&b);
-
-  volatile int *priority = &a.holder->priority;
 
   thread_create ("a", PRI_DEFAULT + 3, a_thread_func, &a);
   msg ("Main thread should have priority %d.  Actual priority: %d.",

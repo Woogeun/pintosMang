@@ -1,0 +1,249 @@
+			+---------------------------+------------------+
+		     	|		CS 330		          |
+			| PROJECT 2: USER PROGRAMS   |
+			| 	   DESIGN DOCUMENT        |
+			+---------------------------+------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Woogeun Bae <qodnrms@kaist.ac.kr>
+Bumki Kim <prorata@kaist.ac.kr>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+nothing declared or changed data structure
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+ load 함수에서 string type의 command line을 인자로 받아 이를 strtok_r로 parsing한 뒤 char[] 형태로 setup_stack 함수에 인자로 넘겨주었다. 자세히 말하면, command line으로받은 input을 parsing하기 위해서 우선 command line이 몇 개의 argument로 이루어 져 있는지 strtok_r을 이용하여 알아내었다. 그 뒤, malloc으로 이 argument들을 저장할 수 있는 크기의 array를 생성해주었다. 이후 command line 전체를 다시 strtok_r을 하여 각 argument 정보를 array에 저장해주었다. 이때 token은 “ “의 1 space로 설정하면 double space문제를 해결할 수 있다. setup_stack 함수는 argv의 정보를 받아 index를 거꾸로 찾아가며 stack에 해당 크기만큼 저장한다. argv를 모두 저장하면 4Byte 단위로 떨어지게 나머지를 \0으로 채운 후, argv의 주소 값들을 마찬가지로 역순으로 저장해준다. 마지막으로 argc를 push하고 return address를 push 하면 된다.
+ 즉, esp를 PHYS_BASE에서 시작하여 점차 내려가는 방식으로 구현한 것인데, 여기서 esp가 감소할 때 만약 감소한 후의 esp가  0x08048000 밑으로 내려가는 경우 load가 false를 return하게 하여  overflowing을 방지하였다.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+ 
+ strtok()은 char *와 delimiters 를 받아 parsing하는데, char *이 NULL이면 이전에 작업했던 string의 남은 부분을 이어서 parsing한다. 즉, NULL인 경우 이어서 재시작 할 char *정보를 static buffer 안에 가지고 있다는 것이다. 때문에 multi-thread 환경에서 strtok()을 사용하는 경우 여러 thread가 한 static buffer를 공유하게 될 수 있는데, 이렇게 되면 원하는 결과를 얻지 못할 위험이 있다. 따라서 save_ptr이라는 포인터 변수를 하나 더 받아서 string을 parsing할 때, parsing한 후 이어서 parsing할 string을 save_ptr에 저장하는 식으로 위와 같은 위험을 피할 수 있다..
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+performance
+ kernel은 kernel process와 user process를 동시에 실행시킨다. shell은 user process이므로, shell에서 kernel process에서 할 처리를 분담하여 performance를 향상시킬 수 있다. 즉, kernel process에서 할 commands의 parsing이나 wrong argument input에 대한 exception 처리를 shell에서 수행하면,  kernel process가 할 일이 줄어들게 되어 performance가 향상된다. 
+memory management
+ kernel process 안에서 commands를 parsing하여 memory allocate를 실행한다면, 만약 free하기 전 exception이 발생할 시 memory leak이 발생할 수 있으며 그 처리 과정이 복잡하다. 하지만 user process 경우에는 user process를 관리하는 kernel process가 존재하므로, memory leak을 kernel process가 관리하여 memory leak을 줄일 수 있다.
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+● struct thread
+struct thread
+  {
+	…
+
+    struct list file_list;              /* list of file_info */
+    struct list child_list;             /* list of child_info */
+    struct file *file;                  /* current thread file */
+  };
+
+file_list는 현재 thread가 open한 file들을 관리한다.
+child_list는 현재 thread가 exec한 child들을 관리한다.
+file은 현재 thread가 실행시킨 file을 가리키고 있다. 메모리에 로드되어 있는 파일 이므로 file_deny_write을 설정할 때 쓰인다.
+
+● struct file_info
+struct file_info {
+    int fd;
+    struct file *file;
+    int position;
+    struct list_elem elem;
+};
+
+ thread가 관리하는 file_list의 element를 구성한다. 생성된 file의 fd, file pointer, position, list_elem정보를 갖고있다.
+
+● struct lock filesys_lock
+struct lock filesys_lock;
+
+ filesys.h, file.h 함수를 사용할 때 mutual exclusion을 보장하기 위한 lock이다.
+
+● struct child_info
+struct child_info {
+    tid_t tid;			
+    struct list_elem elem;
+};
+
+ thread가 관리하는 child_list의 element를 구성한다. child의 tid, list_elem 정보를 가지고 있다.
+● enum process_statsus
+enum process_status {
+	WAIT_FINISHED,
+	WAIT_RUNNING,
+	WAIT_ALREADY,
+	LOADING,
+	LOAD_SUCCESS,
+	LOAD_FAIL
+};
+
+ process 생성과 load, wait 상태를 synchronize시킬 때 나눈 상태들을 저장한다. 
+
+●struct list wait_list
+struct list wait_list;
+
+ 어떤 process를 기다리고 있는 process의 pair 정보를 저장하며 process.c에서 정보를 모두 가지고 있어 총괄한다. wait_info structure로 구성되어 있다.
+
+●struct wait_info
+struct wait_info {
+	struct thread *waiter_thread;
+	tid_t waitee_tid;
+	int status;
+	int loaded;		/* LOADING, LOAD_SUCCESS, LOAD_FAIL */
+	int is_running;		/* WAIT_FINISHED, WAIT_RUNNING, WAIT_ALREADY */
+
+	struct list_elem elem;
+};
+
+ wait_list에 저장되어 있는 element의 구성이다. waiter_thread가 기다리고 있는 thread의 pointer를 가리킨다. waitee_tid는 이 waiter_thread가 기다리는 thread의 tid를 말한다. status는 waitee_tid의 thread가 종료되면서 return한 status 정보를 담고 있으며, loaded는 child process가 생성되었을 때 memory에 load하는 과정에서 load하는 중인지, 성공적으로 끝냈는지, 실패했는지의 정보를 담고있다. parent process가 child process의 load와 synchronize 하기 위해 만들었다. is_running은 waiter_thread가 waitee_tid thread를 기다리고 있을 때 waitee_tid thread의 상태를 알기 위해 정보를 담고 있다. list_elem정보도 담고있다.
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+ fd는 -1, 0, 1을 제외한 2부터 값을 차례로 증가하며 얻는다. thread안의 file_list안에 file_info들은 fd가 증가하는 순서대로 정렬되어 있다. 만약 file_list가 비어있다면 2를, 비어있지 않다면 unique한 가장 작은 fd를 return해준다. get_fd() 함수가 그 역할을 담당한다. open할 때마다 fd를 얻으며 thread마다 file_list를 관리해 다른 thread와 같은 fd를 공유하더라도 다른 file을 reference 할 수 있다. 
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+ read, write syscall 두 경우 같은 메커니즘으로 돌아간다. 우선 인자로 받은 char * 이 user가 사용하기에 valid한 address인지 체크한다. 아닐 경우 exit(-1)을 call한다. 이후 read는 fd가 0이면 stdin, 1이면 exit(-1), write는 fd가 0이면 exit(-1), 1이면 stdout 함수를 실행시켜준다. stdio가 아닐 경우에는 open한 file을 read, write하겠다는 의미이다. 현재 thread안의 file_list안에서 fd를 통해 file_info를 찾아내고 file.c에 있는 file_read, file_write를 각각 실행시켜준다. 이 부분은 critical section이므로 filesys_lock을 acquire하고 release해준다. 이후 read하고 write한 bytes를 return하여 frame의 eax register에 저장해준다.
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+ Page table은 1024개의 page table entry로 구성되어 있다. 따라서, least number of inspection은 한 번에 page를 발견하는 경우일 것이므로 1이며, greatest possible number of inspection은 1024일 것이다. syscall이 만약 2bytes만 copy를 한다고 하면, 1024 * 4kB의 공간을 2bytes씩 조사할 수 있다는 것이므로, 최소는 여전히 1이겠지만 최대는 1024*4kB / 2B = 2097152(2^21)번일 것이다. 즉, 원하는 page를 찾기 위해서는 한 page의 크기(syscall이 copy할 수 있는 크기)가 클 수록 좋겠지만, 너무 크면 page내의 공백(아무것도 저장되지 않은 공간)이 증가할 수 있으므로, 현재의 4kB가 적절할 것으로 생각된다. 이 숫자를 improve하고 싶다면, 각 page마다 number를 붙여서 해당 number대로 sorted list를 구성한다면, 최대 log2(1024) = 10회의 조사로 찾아낼 수 있을 것이다. 
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+ wait이 불리면 바로 process.c에 있는 process_wait을 실행시킨다. 이유는 kernel에서 wait user system call을 부르지 않고 바로 process_wait함수를 실행하기 때문에 process.c 안의 process_wait이 제대로 구현되어 있어야하기 때문이다. process_wait은 wait_list를 탐색하여 기다리게 될 tid의 wait pair 정보를 파악한다. 찾아낸 wait_info의 is_running이 WAIT_FINISHED상태 이면 child가 생성된후 parent가 wait을 콜하기 전 이미 child process가 끝난 상태를 말한다. 이 경우 parent는 wait하지 않고 status를 확인하여 그 값을 return한다. WAIT_RUNNING상태 이면 아직 child process가 실행중인 상태를 말한다. child process가 끝날 때까지 thread_block()으로 기다리며 child process의 exit으로 return된 wait_info의 status값을 return한다. WAIT_ALREADY상태 이면 이후 waitee_tid의 thread를 wait할 때 exit(-1)를 실행시킨다. 
+ exit함수가 불리면 thread_exit()을 실행시키기 전 wait_list안에 현재 thread의 tid를 기다리고 있는 wait_info들을 모두 찾아 is_running이 WAIT_RUNNING이면 WAIT_ALREADY로 바꾸어 이미 wait했음을 알리고, 그 thread의 parent가 block된 상태라면 unblock을 시켜준다.
+
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+user memory error handling
+ system call을 호출할 때 넘겨주는 pointer 값들은 모두 valid_address() 함수를 거친다.  valid_address()에서는 현재 thread의 page안의 해당 address가 dirty 상태인지, 아닌지를 체크하여 결과값을 넘겨준다. 이는 pagedir.h의 page_is_dirty()함수로 정의되어 있다. 이 때, page_is_dirty()는 kernel thread의 page를 말하기 때문에 kernel의 주소를 넘겨주어도 is_dirty로 valid address라 통과시킬 수 있다. 따라서 user입장에서는 PHYS_BASE 이하의 메모리만 접근 가능하므로 조건을 추가하여 결과값을 return해준다. 또한 user program에서 asm 를 통해 강제로 invalid memory에 접근하는 경우가 있다. 이 경우 page fault가 발생하는데  page fault로 thread가 에러를 내뱉으며 강제종료 되는 대신, exit(-1)을 call하여 user가 잘못 접근했음을 kernel에게 알린다. 
+ 
+memory leak management
+ code상에서 malloc을 사용하는 경우는 3가지 경우가 있다. file을 open하여 file_list에 file_info를 추가하고 file_open을 실행시킬 때, exec로 child가 생성되어 child_list에 child_info를 추가할 때, 마지막으로 exec로 parent가 child의 memory load를 기다려야 할 때 필요한 wait_list에 wait_info를 추가할 때 3가지 경우에만 나타난다. 첫 번째와 두 번째 경우 exit이 불리면 thread_exit()을 실행시키기 전, 해당 thread의 file_list의 모든 element에 대하여 file_close와 free를 실행시켜주며, 마찬가지로 child_list에 대해서도 모든 element에 대해 free를 실행시켜 준다. wait_list는 init.c의 마지막 thread_exit()을 하기 전에 free_wait_list()함수로 wait_info들을 모두 free시켜 준다. 
+ 모든 thread는 process_execute()와 exit()을 거친다. (halt의 경우 제외) 따라서 process의 시작에서 malloc을 하고 끝에서 모든 memory에 대해 free를 실행시키므로 memory leak이 없다. 
+ 또한, page 관련 allocation을 하는 경우 이에 대해서도 free를 해주어야 memory leak이 발생하지 않는다. 때문에, 기존의 src 내에서 구현되어 있던 page 관련 memory allocation와 free의 구조를 유지하면서 project를 진행하였다. 
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+ wait_info의 loaded로 load의 상태를 전달한다. parent가 process를 생성하면서 wait_list에 loaded가 LOADING인 wait_info를 추가한다. wait_info에는 waiter_thread, waitee_thread의 tid 정보를 담고 있다. parent는 LOADING wait_info를 추가한 후 LOADING상태이면 아무것도 하지않는 busy-waiting 상태로 들어간다. 이후에 child가 load에 성공하면 wait_list(wait_list는 공유자원이다.) 에서 자신의 tid와 waitee_thread의 tid가 일치하는 wait_info를 찾고, 이 wait_info의 loaded정보를 성공이면 LOAD_SUCCESS, 실패면 LOAD_FAIL로 저장한다. parent는 loaded가 바뀌었으므로 busy-waiting에서 벗어나고 이후의 task를 실행시킬 수 있다. 
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+ resource free management : B6에서 memory leak이 없다는 것을 보장한다. 
+ race condition : parent와 child는 wait_list, filesys_lock 두 가지의 공유자원이 존재한다. filesys_lock의 lock이므로 제대로 관리되며, wait_list는 wait_list에 push되는 경우만 고려하면 되므로(pop되는 경우는 init.c의 마지막에서 밖에 없다.) wait_lock을 두어 하나의 thread만 관여할 수 있게 mutual exclusion을 보장하면 된다. 
+ synchronization : 
+C가 생기기 전 P가 C를 wait: wait을 부르면 가장 먼저 parent thread의 child_list에 해당 tid를 가진 child가 있는지 파악한다. 없으면 -1을 return한다. 
+C가 생성된 후 P가 C를 wait: C가 끝나있는 경우에는(WAIT_FINISHED), wait하지 않고 그대로 진행하며, C가 끝나있지 않는 경우에는(WAIT_RUNNING), wait하여 child가 exit할 때까지 기다린다.
+C가 생기기 전 P가 terminate: B7에서 child를 생성한다면 완전히 생성될 때까지 P는 busy-waiting하므로 terminate하지 않는다. 불가능한 case이다.
+C가 생성된 후 P가 terminate: P가 C를 exec만 하고 wait하지 않은 채 종료된 경우이다. 모든 thread는 exit을 하며(halt 제외), 이 때 각자 할당한 자원은 각자 free하므로 문제가 없다.
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+ valid_address() 함수를 사용하지 않으면 user가 system call의 return값을 받은 이후 발생하는 unexpected memory access, 즉 page fault가 빈번해진다. 이 때 발생하는 page fault와, user program에서 asm로 강제로 일으키는 page fault는 system call 을 거치지 않기 때문에 kernel에 손상을 줄 수 있다. 따라서 page fault를 줄이는 방향인 kernel의 system call에서 먼저 valid_address() 함수를 통해 validation을 확인하였고, page fault가 발생하는 경우에는 임시 방편으로 exit(-1)을 호출하였다.
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+ advantage: thread마다 각각 fd를 관리하므로 같은 fd이면서 다른 file들을 관리할 수 있다. 즉, thread당 n개의 file을 수용할 수 있고, thread수가 k개라면, fd를 공유할때는 모든 thread를 통틀어 n개 밖에 가능하지 않지만, fd를 공유하지 않는 이 디자인에서는 k * n개를 수용할 수 있다. 또한 fd가  [2, 3, 4, 5] 에서 3을 close하면  [2, 4, 5]가 된다. 이후에 다시 open하면 [2, 4, 5, 6] 이 아닌 [2, 3, 4, 5] 가 되어 fd의 일관성을 유지시킬 수 있으며, cyclic한 경우를 제외해 가독성과 효율을 높여줄 수 있다. 
+ disadvantage: 만약 user가 open으로 fd값을 안 후, 이를 local로 저장한 이후에 close, 그리고 다른 file을 open했을 때 이 fd가 local에 저장한 fd와 같은 경우 user 입장에서 문제가 생긴다. user가 close한 줄 모르고 이전의 fd를 가지고 read, write해보면 실제 존재하는 fd이기 때문에 error는 생기지 않지만, user가 의도했던 방향과는 다른 결과를 만들어낼 수도 있다. 
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+ PintOS에서는 process당 thread, 1대1 매치이기 때문에 tid_t를 곧바로 pid_t로 사용하였다. 이는 process와 thread 사이의 관계성을 파악하는 데에 확실한 효과를 주지만, 하나의 process안에서 여러 개의 thread를 생성하는 경우 tid_t를 관리할 다른 알고리즘이 필요하다. 
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
+
