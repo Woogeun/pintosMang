@@ -29,7 +29,6 @@ test_alarm_priority (void)
       int priority = PRI_DEFAULT - (i + 5) % 10 - 1;
       char name[16];
       snprintf (name, sizeof name, "priority %d", priority);
-      //printf("before create\n");
       thread_create (name, priority, alarm_priority_thread, NULL);
     }
 
@@ -42,7 +41,6 @@ test_alarm_priority (void)
 static void
 alarm_priority_thread (void *aux UNUSED) 
 {
-  //printf("in the create function\n");
   /* Busy-wait until the current time changes. */
   int64_t start_time = timer_ticks ();
   while (timer_elapsed (start_time) == 0)
