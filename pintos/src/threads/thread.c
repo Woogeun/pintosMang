@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -93,6 +94,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&wait_list);
   lock_init (&wait_lock);
+  list_init (&thread_all_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -197,6 +199,12 @@ thread_create (const char *name, int priority,
   /* Stack frame for switch_threads(). */
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
+
+  struct thread_info *t_info = (struct thread_info *) malloc (sizeof (struct thread_info));
+  t_info->thread = t;
+  t_info->tid = tid;
+
+  list_push_back(&thread_all_list, &t_info->elem);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -446,6 +454,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->child_list);
   list_init(&t->file_list);
   t->file = NULL;
+  t->parent = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -561,3 +570,38 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+void remove_thread(tid_t tid) {
+  struct list_elem *e;
+  for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
+    struct thread_info *t_info = list_entry(e, struct thread_info, elem);
+    if (t_info->tid == tid) {
+      list_remove(&t_info->elem);
+      break;
+    }
+  }
+}
+
+struct thread *get_thread_by_tid(tid_t tid) {
+  struct list_elem *e;
+  for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
+    struct thread_info *t_info = list_entry(e, struct thread_info, elem);
+    if (t_info->tid == tid)
+      return t_info->thread;
+  }
+  return NULL;
+}
+
+struct thread *get_parent_by_tid(tid_t tid) {
+  //printf("<<1>>\n");
+  struct list_elem *e;
+  for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
+    struct thread_info *t_info = list_entry(e, struct thread_info, elem);
+    if (is_child(t_info->thread, tid)) {
+     // printf("<<2>>\n");
+      return t_info->thread;
+    }
+  }
+  //printf("<<3>>\n");
+  return NULL;
+}

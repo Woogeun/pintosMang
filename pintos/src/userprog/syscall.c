@@ -12,6 +12,7 @@
 #include "filesys/file.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "devices/input.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -55,10 +56,10 @@ void halt() {
 }
 
 void exit(int status) {
-
-	lock_acquire(&free_lock);
+	//lock_acquire(&free_lock);
 
 	struct thread *curr = thread_current();
+
 	char *file_name = curr->name;
 
 	printf("%s: exit(%d)\n", file_name, status);
@@ -76,10 +77,22 @@ void exit(int status) {
   		lock_release(&filesys_lock);
   	}
 
+  	remove_thread(curr->tid);
+
+ //  	printf("-----------all thread ----------\n");
+	// struct list_elem *e;
+	// int c = 0;
+	// for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
+	// 	struct thread_info *t_info = list_entry(e, struct thread_info, elem);
+	// 	printf("thread id: %d\n", t_info->tid);
+	// 	c++;
+	// }
+	// printf("-----------end------------------ : %d\n", c);
+
   	ASSERT(list_empty(&curr->child_list));
   	ASSERT(list_empty(&curr->file_list));
 
-  	lock_release(&free_lock);
+  	//lock_release(&free_lock);
 
 	thread_exit();
 }
@@ -319,8 +332,10 @@ bool valid_address(const void *address) {
 	return valid; 
 }
 
-bool is_child(tid_t tid) {
-  struct child_info *c_info = find_child_info_by_tid(tid);
+bool is_child(struct thread *t, tid_t tid) {
+	//printf("<<4>>\n");
+  struct child_info *c_info = find_child_info_by_tid(t, tid);
+  //printf("<<5>>\n");
   if (c_info == NULL) return false;
   return true;
 }
@@ -334,32 +349,35 @@ struct wait_info *create_wait_info() {
 }
 
 struct wait_info *find_wait_info_by_child_tid(tid_t tid) {
-  struct list_elem *e;
-  for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
-    struct wait_info *w_info = list_entry(e, struct wait_info, elem);
-    if (w_info->waitee_tid == tid) return w_info;
-  }
-  return NULL;
+  	struct list_elem *e;
+  	lock_acquire(&wait_lock);
+  	for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
+    	struct wait_info *w_info = list_entry(e, struct wait_info, elem);
+    	if (w_info->waitee_tid == tid) {
+    		lock_release(&wait_lock);
+    		return w_info;
+    	}
+  	}
+  	lock_release(&wait_lock);
+  	return NULL;
 }
 
 void awake_wait_thread(int status) {
-	struct list_elem *e;
 	tid_t curr_tid = thread_current()->tid;
 
-	enum intr_level old_level;
-	old_level = intr_disable();
+	struct thread *parent = get_parent_by_tid(curr_tid);
+	struct wait_info *w_info = find_wait_info_by_child_tid(curr_tid);
 
-	for (e = list_begin(&wait_list); e != list_end(&wait_list); e = list_next(e)) {
-		struct wait_info *w_info = list_entry(e, struct wait_info, elem);
-		if (w_info->waitee_tid == curr_tid) {
-			w_info->status = status;
-			if (w_info->is_running == WAIT_RUNNING) w_info->is_running = WAIT_FINISHED;
-			if (w_info->waiter_thread->status == THREAD_BLOCKED)
-				thread_unblock(w_info->waiter_thread);
-		}
+	if (parent != NULL) {
+		struct child_info *c_info = find_child_info_by_tid(parent, curr_tid);
+		c_info->is_exit = true;
+		c_info->status = status;
 	}
 
-	intr_set_level(old_level);
+	if (w_info != NULL) {
+		w_info->status = status;
+		thread_unblock(w_info->waiter_thread);
+	}
 }
 
 void free_wait_list() {
@@ -367,6 +385,14 @@ void free_wait_list() {
     struct list_elem *e = list_pop_front(&wait_list);
     struct wait_info *w_info = list_entry(e, struct wait_info, elem);
     free(w_info);
+  }
+}
+
+void free_thread_list() {
+  while(!list_empty(&thread_all_list)) {
+    struct list_elem *e = list_pop_front(&thread_all_list);
+    struct thread_info *t_info = list_entry(e, struct thread_info, elem);
+    free(t_info);
   }
 }
 
@@ -437,17 +463,25 @@ void free_file_list() {
 
 struct child_info *create_child_info() {
   struct child_info *ptr = (struct child_info *) malloc (sizeof(struct child_info));
+  ptr->tid = -1;
+  ptr->is_exit = false;
+  ptr->status = -1;
   return ptr;
 }
 
-struct child_info *find_child_info_by_tid(tid_t tid) {
-  struct thread *curr = thread_current();
-  struct list *child_list = &curr->child_list;
+struct child_info *find_child_info_by_tid(struct thread *t, tid_t tid) {
+	//printf("<<6>>\n");
+  struct list *child_list = &t->child_list;
   struct list_elem *e;
+  //printf("<<7>>\n");
   for (e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
     struct child_info *c_info = list_entry(e, struct child_info, elem);
-    if (c_info->tid == tid) return c_info;
+    if (c_info->tid == tid) {
+    	//printf("<<8>>\n");
+    	return c_info;
+    }
   }
+  //printf("<<9>>\n");
   return NULL;
 }
 

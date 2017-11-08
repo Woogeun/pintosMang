@@ -35,7 +35,6 @@ struct wait_info {
 	tid_t waitee_tid;
 	int status;
 	int loaded;
-	int is_running;			/* wait_status */
 
 	struct list_elem elem;
 };
@@ -43,6 +42,8 @@ struct wait_info {
 struct child_info {
     tid_t tid;			
     struct list_elem elem;
+    bool is_exit;
+    int status;
 };
 
 #endif /* userprog/process.h */

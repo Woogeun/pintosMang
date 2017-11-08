@@ -21,6 +21,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -61,20 +62,20 @@ process_execute (const char *file_name)
   w_info->waitee_tid = tid;
   w_info->status = INT_MAX;
   w_info->loaded = LOADING;
-  w_info->is_running = WAIT_RUNNING;
 
   lock_acquire(&wait_lock);
   list_push_back(&wait_list, &w_info->elem);
   lock_release(&wait_lock);
-  
+
   while(w_info->loaded == LOADING)
     thread_yield();
 
   free(fn);
 
-  if (w_info->loaded == LOAD_FAIL)
+  if (w_info->loaded == LOAD_FAIL) {
+    list_remove(&w_info->elem);  
     tid = -1;
-  
+  }
   else {
     struct child_info *c_info = create_child_info();
     c_info->tid = tid;
@@ -82,6 +83,7 @@ process_execute (const char *file_name)
 
     if (tid == TID_ERROR)
       palloc_free_page (fn_copy); 
+      list_remove(&w_info->elem);
   }
 
   return tid;
@@ -108,6 +110,7 @@ start_process (void *f_name)
   palloc_free_page (file_name);
   if (!success) {
     w_info->loaded = LOAD_FAIL;
+    list_remove(&w_info->elem);
     exit(-1);
   } else {
     w_info->loaded = LOAD_SUCCESS;
@@ -140,34 +143,42 @@ process_wait (tid_t tid)
   enum intr_level old_level;
   old_level = intr_disable();
 
-  if (!is_child(tid))
-    return -1;
-
   //check whether already tid is terminated, or already waited
   struct thread *curr = thread_current();
-  struct wait_info *w_info = find_wait_info_by_child_tid(tid);
 
-  if (w_info->is_running == WAIT_FINISHED){
-    w_info->is_running = WAIT_ALREADY;
-    return w_info->status;
-  }
-  if (w_info->is_running == WAIT_ALREADY) 
+  if (!is_child(curr, tid))
     return -1;
 
+  struct child_info *c_info = find_child_info_by_tid(curr, tid);
+  if (c_info->is_exit){
+    //printf("<<3>>\n");
+    list_remove(&c_info->elem);
+    //printf("<<4>>\n");
+    return c_info->status;
+  }
 
-  ASSERT(w_info->is_running == WAIT_RUNNING);
+  struct wait_info *w_info = create_wait_info();
+
   w_info->waiter_thread = curr;
   w_info->waitee_tid = tid;
   w_info->status = INT_MAX;
   w_info->loaded = LOAD_SUCCESS;
-  w_info->is_running = WAIT_ALREADY;
+  
+  list_push_back(&wait_list, &w_info->elem);
 
   thread_block();
 
   intr_set_level(old_level);
+
+  int status = w_info->status;
+
+  lock_acquire(&wait_lock);
+  list_remove(&w_info->elem);
+  lock_release(&wait_lock);
+  list_remove(&c_info->elem);
   
 
-  return w_info->status;
+  return status;
 }
 
 /* Free the current process's resources. */

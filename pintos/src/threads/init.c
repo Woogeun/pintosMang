@@ -29,11 +29,21 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+#endif
 #ifdef FILESYS
 #include "devices/disk.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+/*
+#ifdef VM
+#include "vm/frame.h"
+#endif
+*/
 
 /* Amount of physical memory, in 4 kB pages. */
 size_t ram_pages;
@@ -109,6 +119,12 @@ main (void)
   serial_init_queue ();
   timer_calibrate ();
 
+#ifdef VM
+  frame_init();
+  page_init();
+  swap_init();
+#endif
+
 #ifdef FILESYS
   /* Initialize file system. */
   disk_init ();
@@ -124,6 +140,7 @@ main (void)
   if (power_off_when_done)
     power_off ();
   free_wait_list();
+  free_thread_list();
   thread_exit ();
 }
 
