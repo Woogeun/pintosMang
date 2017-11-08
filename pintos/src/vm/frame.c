@@ -10,23 +10,29 @@ void frame_init(void) {
 	lock_init(&frame_lock);
 }
 
-void *frame_alloc(enum palloc_flags flags UNUSED) {
+void *frame_get_page(enum palloc_flags flags) {
 
-	// void *vaddr = NULL;
-	// struct frame *f = (struct frame *) malloc (sizeof(struct frame));
-	// f->vaddr = vaddr;
+	void *vaddr = palloc_get_page(flags);
+	if (vaddr == NULL) 
+		PANIC("run out of frame");
 
-	return NULL;
+	struct frame *f = (struct frame *) malloc (sizeof(struct frame));
+	f->vaddr = vaddr;
+
+	return vaddr;
 }
 
 
-void frame_free(void *vaddr) {
+void frame_free_page(void *vaddr) {
 
 	struct frame *f = frame_get_by_addr(vaddr, true);
+	if (f == NULL)
+		PANIC("no such address page in frame list");
+	palloc_free_page(f->vaddr);
 	free(f);
 }
 
-void *frame_evict(void) {
+void *frame_evict_page(void) {
 
 	return frame_pop_front_list();
 }
@@ -55,6 +61,8 @@ struct frame *frame_pop_front_list(void) {
 void frame_accessed(void *vaddr) {
 
 	struct frame *f = frame_get_by_addr(vaddr, true);
+	if (f == NULL)
+		PANIC("no such address page in frame list");
 	frame_add_list(f);
 }
 

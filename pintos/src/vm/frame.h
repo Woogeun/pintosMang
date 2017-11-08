@@ -15,9 +15,9 @@ struct frame {
 };
 
 void frame_init(void);
-void *frame_alloc(enum palloc_flags);
-void frame_free(void *);
-void *frame_evict(void);
+void *frame_get_page(enum palloc_flags);
+void frame_free_page(void *);
+void *frame_evict_page(void);
 
 void frame_add_list(struct frame *);
 struct frame *frame_pop_front_list(void);
