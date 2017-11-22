@@ -119,16 +119,16 @@ main (void)
   serial_init_queue ();
   timer_calibrate ();
 
-#ifdef VM
-  frame_init();
-  page_init();
-  swap_init();
-#endif
-
 #ifdef FILESYS
   /* Initialize file system. */
   disk_init ();
   filesys_init (format_filesys);
+#endif
+
+#ifdef VM
+  frame_init();
+  page_init();
+  swap_init();
 #endif
 
   printf ("Boot complete.\n");

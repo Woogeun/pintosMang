@@ -5,6 +5,12 @@
 #include <stdbool.h>
 
 /* A counting semaphore. */
+
+struct lock_info {
+  struct lock *lock;
+  struct list_elem elem;
+};
+
 struct semaphore 
   {
     unsigned value;             /* Current value. */

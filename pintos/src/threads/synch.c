@@ -197,8 +197,12 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  //struct lock_info *l_info = (struct lock_info *) malloc (sizeof(struct lock_info));
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  
+  //l_info->lock = lock;
+  //list_push_back(&thread_current()->held_lock_list, &l_info->elem);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -234,6 +238,10 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   lock->holder = NULL;
+  // struct lock_info *l_info = get_lock_info(lock);
+  // list_remove(&l_info->elem);
+  // free(l_info);
+
   sema_up (&lock->semaphore);
 }
 
@@ -247,6 +255,7 @@ lock_held_by_current_thread (const struct lock *lock)
 
   return lock->holder == thread_current ();
 }
+
 
 /* One semaphore in a list. */
 struct semaphore_elem 

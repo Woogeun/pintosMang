@@ -15,6 +15,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#ifdef VM
+#include "vm/page.h"
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -605,3 +608,4 @@ struct thread *get_parent_by_tid(tid_t tid) {
   //printf("<<3>>\n");
   return NULL;
 }
+

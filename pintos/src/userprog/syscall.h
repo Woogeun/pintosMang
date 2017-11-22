@@ -22,13 +22,13 @@ int         read(int, char *, size_t);
 int         write(int, const char *, size_t);	
 void        seek(int, unsigned);				
 unsigned    tell(int);						
-void        close(int);						
+void        close(int);		
+int 		mmap(int, void *);
+void 		munmap(int);				
 
 
 //shared data
 struct lock filesys_lock;
-struct lock free_lock;
-
 
 //My Implementation
 int return_args(struct intr_frame *, int);
@@ -56,6 +56,7 @@ struct 	child_info *create_child_info(void);
 struct 	child_info *find_child_info_by_tid(struct thread *, tid_t);
 void 	free_child_list(void);
 
-
+//about page allocation
+void free_page(void);
 
 #endif /* userprog/syscall.h */

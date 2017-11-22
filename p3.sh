@@ -9,15 +9,19 @@ case $1 in
     cd ../
     make clean
     break;;
+  "check")
+    make grade
+    vi grade
+    break;;
   "pt")
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-grow-stack -a pt-grow-stack --swap-disk=4 -- -q   -f run pt-grow-stack
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-grow-pusha -a pt-grow-pusha --swap-disk=4 -- -q   -f run pt-grow-pusha
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-grow-bad -a pt-grow-bad --swap-disk=4 -- -q   -f run pt-grow-bad
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-big-stk-obj -a pt-big-stk-obj --swap-disk=4 -- -q   -f run pt-big-stk-obj
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-bad-addr -a pt-bad-addr --swap-disk=4 -- -q   -f run pt-bad-addr
-    * pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-bad-read -a pt-bad-read -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run pt-bad-read 
+    pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-bad-read -a pt-bad-read -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run pt-bad-read 
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-write-code -a pt-write-code --swap-disk=4 -- -q   -f run pt-write-code
-    * pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-write-code2 -a pt-write-code2 -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run pt-write-code2
+    pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-write-code2 -a pt-write-code2 -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run pt-write-code2
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/pt-grow-stk-sc -a pt-grow-stk-sc --swap-disk=4 -- -q   -f run pt-grow-stk-sc
     break;;
   "page")

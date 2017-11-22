@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <string.h>
+#include <hash.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -12,7 +13,10 @@
 #include "filesys/file.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 #include "devices/input.h"
+
 
 
 static void syscall_handler (struct intr_frame *);
@@ -22,7 +26,6 @@ void
 syscall_init (void) 
 {
 	lock_init(&filesys_lock);
-	lock_init(&free_lock);
   	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -47,7 +50,11 @@ syscall_handler (struct intr_frame *f)
   	case SYS_SEEK:		seek(arg1, arg2); 							break;
   	case SYS_TELL:		f->eax = tell(arg1); 						break;
   	case SYS_CLOSE:		close(arg1); 								break;
+  	case SYS_MMAP:		f->eax = mmap(arg1, (void *) arg2);			break;
+  	case SYS_MUNMAP:	munmap(arg1);								break;
   	default:														break;
+  	
+
   }
 }
 
@@ -56,13 +63,15 @@ void halt() {
 }
 
 void exit(int status) {
-	//lock_acquire(&free_lock);
 
 	struct thread *curr = thread_current();
 
 	char *file_name = curr->name;
 
 	printf("%s: exit(%d)\n", file_name, status);
+
+	if (filesys_lock.holder == curr)
+		lock_release(&filesys_lock);
 
 	free_child_list();
   	free_file_list();
@@ -79,20 +88,8 @@ void exit(int status) {
 
   	remove_thread(curr->tid);
 
- //  	printf("-----------all thread ----------\n");
-	// struct list_elem *e;
-	// int c = 0;
-	// for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
-	// 	struct thread_info *t_info = list_entry(e, struct thread_info, elem);
-	// 	printf("thread id: %d\n", t_info->tid);
-	// 	c++;
-	// }
-	// printf("-----------end------------------ : %d\n", c);
-
   	ASSERT(list_empty(&curr->child_list));
   	ASSERT(list_empty(&curr->file_list));
-
-  	//lock_release(&free_lock);
 
 	thread_exit();
 }
@@ -285,7 +282,14 @@ void close(int fd) {
 	}
 }
 
+int mmap(int fd UNUSED, void *addr UNUSED) {
 
+	return 0;
+}
+
+void munmap(int mapid_t UNUSED) {
+
+}
 
 
 
@@ -376,7 +380,8 @@ void awake_wait_thread(int status) {
 
 	if (w_info != NULL) {
 		w_info->status = status;
-		thread_unblock(w_info->waiter_thread);
+		if (w_info->waiter_thread->status == THREAD_BLOCKED)
+			thread_unblock(w_info->waiter_thread);
 	}
 }
 
@@ -497,6 +502,46 @@ void free_child_list() {
 		free(c_info);
 	}
 }
+
+
+//about page allocation
+void free_page() {
+	struct thread *curr = thread_current();
+	struct hash *h = &curr->page_table;
+	size_t i;
+
+	for (i = 0; i < h->bucket_cnt; i++) {
+       	struct list *bucket = &h->buckets[i];
+      	struct list_elem *elem, *next;
+
+      	for (elem = list_begin (bucket); elem != list_end (bucket); elem = next) {
+      		next = list_next(elem);
+      		struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
+      		struct page *p = hash_entry(he, struct page, elem);
+      		//void *vaddr = p->vaddr;
+          	hash_delete(h, &p->elem);
+          	//frame_free_page(vaddr);
+          	free(p);
+        }
+    }    
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

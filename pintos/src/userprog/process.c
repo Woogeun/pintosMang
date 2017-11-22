@@ -22,6 +22,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -89,6 +91,23 @@ process_execute (const char *file_name)
   return tid;
 }
 
+
+static unsigned hash_func (const struct hash_elem *, void *);
+static bool less_func (const struct hash_elem *, const struct hash_elem *, void *);
+
+static unsigned hash_func (const struct hash_elem *e, void *aux UNUSED) {
+
+  struct page *p = hash_entry(e, struct page, elem);
+  return hash_int((int) p->upage);
+}
+
+static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+
+  struct page *cmp1 = hash_entry(a, struct page, elem);
+  struct page *cmp2 = hash_entry(b, struct page, elem);
+  return cmp1->upage < cmp2->upage;
+}
+
 /* A thread function that loads a user process and makes it start
    running. */
 static void
@@ -97,6 +116,9 @@ start_process (void *f_name)
   char *file_name = f_name;
   struct intr_frame if_;
   bool success;
+
+  /* initialize hash table of current thread */
+  hash_init(&thread_current()->page_table, hash_func, less_func, NULL);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -409,8 +431,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+              //if (!load_segment (file, file_page, (void *) mem_page,
+                                 //read_bytes, zero_bytes, writable))
+              //  goto done;
+              if (!page_load_segment(file, file_page, (void *) mem_page, read_bytes, zero_bytes, writable))
                 goto done;
             }
           else
@@ -420,7 +444,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, argc, argv))
+  if (!page_setup_stack (esp, argc, argv))
     goto done;
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -437,7 +461,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
+//static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -498,119 +522,126 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
-{
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
+// static bool
+// load_segment (struct file *file, off_t ofs, uint8_t *upage,
+//               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+// {
+//   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+//   ASSERT (pg_ofs (upage) == 0);
+//   ASSERT (ofs % PGSIZE == 0);
 
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
-    {
-      /* Do calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+//   file_seek (file, ofs);
+//   while (read_bytes > 0 || zero_bytes > 0) 
+//     {
+//       /* Do calculate how to fill this page.
+//          We will read PAGE_READ_BYTES bytes from FILE
+//          and zero the final PAGE_ZERO_BYTES bytes. */
+//       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+//       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      //uint8_t *kpage = palloc_get_page (PAL_USER);
-      uint8_t *kpage = frame_get_page (PAL_USER);
+//       /* Get a page of memory. */
+//       //uint8_t *kpage = palloc_get_page (PAL_USER);
+//       uint8_t *kpage = frame_get_page (PAL_USER);
       
-      if (kpage == NULL)
-        return false;
+//       if (kpage == NULL)
+//         return false;
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          //palloc_free_page (kpage);
-          frame_free_page(kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+//       page_add_hash(kpage);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          //palloc_free_page (kpage);
-          frame_free_page(kpage);
-          return false; 
-        }
+//       /* Load this page. */
+//       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+//         {
+//           //palloc_free_page (kpage);
+//           frame_free_page(kpage);
+//           page_remove_hash(kpage);
+//           return false; 
+//         }
+//       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-    }
-  return true;
-}
+//       /* Add the page to the process's address space. */
+//       if (!install_page (upage, kpage, writable)) 
+//         {
+//           //palloc_free_page (kpage);
+//           frame_free_page(kpage);
+//           page_remove_hash(kpage);
+//           return false; 
+//         }
+
+//       /* Advance. */
+//       read_bytes -= page_read_bytes;
+//       zero_bytes -= page_zero_bytes;
+//       upage += PGSIZE;
+//     }
+//   return true;
+// }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool
-setup_stack (void **esp, int argc, char **argv) 
-{
-  uint8_t *kpage;
-  bool success = false;
+// static bool
+// setup_stack (void **esp, int argc, char **argv) 
+// {
 
-  //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  kpage = frame_get_page(PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        //palloc_free_page (kpage);
-        frame_free_page(kpage);
-    }
+//   uint8_t *kpage;
+//   bool success = false;
 
-  int i;
-  size_t len;
-  void **addresses = (void **) malloc(sizeof(void *) * argc);
+//   //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+//   kpage = frame_get_page(PAL_USER | PAL_ZERO);
 
-  //add argv to stack reversely
-  for (i = argc-1; i >= 0; i--) {
-    len = strlen(argv[i]);
-    *esp -= len + 1; if (((int) *esp) > 0x8048000) return false;
-    addresses[i] = memcpy(*esp, argv[i], len + 1);
-  }
+//   success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+//   if (success)
+//     *esp = PHYS_BASE;
+//   else {
+//     //palloc_free_page (kpage);
+//     frame_free_page(kpage);
+//     return false;
+//   }
 
-  //align set zero
-  int align = (int) *esp % 4;
-  if (align < 0)
-    align += 4;
-  *esp -= align; if (((int) *esp) > 0x8048000) return false;
-  memset(*esp, 0, align);
+//   page_add_hash(kpage, true, ON_MEMORY);
+  
+//   int i;
+//   size_t len;
+//   void **addresses = (void **) malloc(sizeof(void *) * argc);
 
-  //set imaginary argument
-  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
-  memset(*esp, 0, sizeof(int));
+//   //add argv to stack reversely
+//   for (i = argc-1; i >= 0; i--) {
+//     len = strlen(argv[i]);
+//     *esp -= len + 1; 
+//     addresses[i] = memcpy(*esp, argv[i], len + 1);
+//   }
 
-  //add argv`s address to the stack 
-  for (i = argc - 1; i >= 0; i--) {
-    *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
-    memcpy(*esp, &addresses[i], sizeof(int));
-  }
+//   //align set zero
+//   int align = (int) *esp % 4;
+//   if (align < 0)
+//     align += 4;
+//   *esp -= align; 
+//   memset(*esp, 0, align);
 
-  //push argv address
-  int argv_address = (int) *esp;
-  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
-  memcpy(*esp, &argv_address, sizeof(int));
+//   //set imaginary argument
+//   *esp -= sizeof(int); 
+//   memset(*esp, 0, sizeof(int));
 
-  //push argc
-  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
-  memcpy(*esp, &argc, sizeof(int));
+//   //add argv`s address to the stack 
+//   for (i = argc - 1; i >= 0; i--) {
+//     *esp -= sizeof(int); 
+//     memcpy(*esp, &addresses[i], sizeof(int));
+//   }
 
-  //push return address zero
-  *esp -= sizeof(int); if (((int) *esp) > 0x8048000) return false;
-  memset(*esp, 0, sizeof(int));
+//   //push argv address
+//   int argv_address = (int) *esp;
+//   *esp -= sizeof(int); 
+//   memcpy(*esp, &argv_address, sizeof(int));
 
-  free(addresses);
-  return success;
-}
+//   //push argc
+//   *esp -= sizeof(int); 
+//   memcpy(*esp, &argc, sizeof(int));
+
+//   //push return address zero
+//   *esp -= sizeof(int); 
+//   memset(*esp, 0, sizeof(int));
+
+//   free(addresses);
+//   return success;
+// }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
@@ -621,16 +652,16 @@ setup_stack (void **esp, int argc, char **argv)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
-install_page (void *upage, void *kpage, bool writable)
-{
-  struct thread *t = thread_current ();
+// bool
+// install_page (void *upage, void *kpage, bool writable)
+// {
+//   struct thread *t = thread_current ();
 
-  /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
+//    Verify that there's not already a page at that virtual
+//      address, then map our page there. 
+//   return (pagedir_get_page (t->pagedir, upage) == NULL
+//           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+// }
 
 
 

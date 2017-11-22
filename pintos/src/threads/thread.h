@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -111,7 +112,9 @@ struct thread
     struct list file_list;              /* list of file_info */
     struct list child_list;             /* list of child_info */
     struct file *file;                  /* current thread file */
-    struct thread *parent;              /* pointing parent threa */           
+    struct thread *parent;              /* pointing parent thread */  
+
+    struct hash page_table;             /* manage page table defined in "vm/page.h" */     
   };
 
 
