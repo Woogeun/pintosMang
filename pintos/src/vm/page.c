@@ -14,21 +14,6 @@
 #include <string.h>
 #include <stdio.h>
 
-static unsigned hash_func (const struct hash_elem *, void *);
-static bool less_func (const struct hash_elem *, const struct hash_elem *, void *);
-
-static unsigned hash_func (const struct hash_elem *e, void *aux UNUSED) {
-
-  struct page *p = hash_entry(e, struct page, elem);
-  return hash_int((int) p->upage);
-}
-
-static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
-
-  struct page *cmp1 = hash_entry(a, struct page, elem);
-  struct page *cmp2 = hash_entry(b, struct page, elem);
-  return cmp1->upage < cmp2->upage;
-}
 
 static void page_print_table(void);
 static bool is_stack_growth(void *, void *);
@@ -37,53 +22,51 @@ static void page_print_table(void) {
 
   enum intr_level old_level = intr_disable();
 
-  printf("=============== page table ==============\n");
+  struct hash *h = &thread_current()->page_hash;
+
+  printf("=============== page table %d ==============\n", thread_current()->tid);
   size_t i;
-    for (i = 0; i < page_hash.bucket_cnt; i++) {
-        struct list *bucket = &page_hash.buckets[i];
+    for (i = 0; i < h->bucket_cnt; i++) {
+        struct list *bucket = &h->buckets[i];
         struct list_elem *elem, *next;
 
         for (elem = list_begin (bucket); elem != list_end (bucket); elem = next) {
           next = list_next(elem);
           struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
           struct page *p = hash_entry(he, struct page, elem);
-          printf("tid: %2d, upage: 0x%8x, position: %6s\n", p->thread->tid, p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap");
+          printf("upage: 0x%8x, position: %6s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap");
         }
     }
-    printf("======================================%d\n", page_hash.elem_cnt);   
+    printf("==========================================\n");   
     intr_set_level(old_level); 
 }
 
 void page_init(void) {
-	hash_init(&page_hash, hash_func, less_func, NULL);
+	//hash_init(&page_hash, hash_func, less_func, NULL);
 }
 
 void page_add_hash(void *upage, bool writable, enum page_position position) {
 	struct page *p = (struct page *) malloc (sizeof(struct page));
-  p->thread = thread_current();
 	p->upage = upage;
 	p->writable = writable;
   p->position = position;
-	hash_insert(&page_hash, &p->elem);
+	hash_insert(&thread_current()->page_hash, &p->elem);
 }
 
 void page_remove_hash(void *upage) {
 	struct page *p = page_get_by_upage(upage);
 	if (p == NULL)
 		PANIC("no such page in current thread");
-	hash_delete(&page_hash, &p->elem);
+	hash_delete(&thread_current()->page_hash, &p->elem);
 	//frame_free_page(upage);
 	free(p);
 }
 
 struct page *page_get_by_upage(void *upage) {
-  //page_print_table();
-  //printf("<<upage: 0x%8x>>\n", upage);
-  struct page *p_ = (struct page *) malloc (sizeof(struct page));
-  struct page *result = NULL;
-  p_->upage = upage;
-  struct hash_elem *he = hash_find(&page_hash, &p_->elem);
 
+  struct page *p_ = (struct page *) malloc (sizeof(struct page));
+  p_->upage = upage;
+  struct hash_elem *he = hash_find(&thread_current()->page_hash, &p_->elem);
   free(p_);
 
   if (he == NULL)
@@ -222,19 +205,23 @@ install_page (void *upage, void *kpage, bool writable)
 
 void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
 
-  //page_print_table();
+  page_print_table();
   
   printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
 
   struct page *p = page_get_by_upage(pg_round_down(fault_addr));
   if (p != NULL) {
-    // page_print_table();
-    //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
-    // if (p->position == ON_SWAP) {
-    //   //swap_in(p->upage);
-    // } else if (p->position == ON_MEMORY) {
+    page_print_table();
+    printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
+    printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
 
-    // }
+    if (p->position == ON_SWAP) {
+      struct frame *f = frame_get_page(PAL_USER, p->upage);
+      swap_in(p->upage);
+      p->position = ON_MEMORY;
+    } else if (p->position == ON_MEMORY) {
+      PANIC("no reason for page fault");
+    }
     exit(-1);
   }
   else if (is_stack_growth(esp, fault_addr)) {  //stack_growth

@@ -92,6 +92,8 @@ process_execute (const char *file_name)
 }
 
 
+static unsigned hash_func (const struct hash_elem *, void *);
+static bool less_func (const struct hash_elem *, const struct hash_elem *, void *);
 
 
 /* A thread function that loads a user process and makes it start
@@ -104,7 +106,7 @@ start_process (void *f_name)
   bool success;
 
   /* initialize hash table of current thread */
-  //hash_init(&thread_current()->page_table, hash_func, less_func, NULL);
+  hash_init(&thread_current()->page_hash, hash_func, less_func, NULL);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -653,6 +655,20 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 
 
 
+
+
+static unsigned hash_func (const struct hash_elem *e, void *aux UNUSED) {
+
+  struct page *p = hash_entry(e, struct page, elem);
+  return hash_int((int) p->upage);
+}
+
+static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+
+  struct page *cmp1 = hash_entry(a, struct page, elem);
+  struct page *cmp2 = hash_entry(b, struct page, elem);
+  return cmp1->upage < cmp2->upage;
+}
 
 
 

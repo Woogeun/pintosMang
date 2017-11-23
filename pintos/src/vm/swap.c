@@ -12,6 +12,7 @@ struct disk *d;
 
 static void swap_print_table(void);
 static struct swap *swap_alloc(int, void *);
+static void swap_free(struct swap *);
 
 void swap_init(void) {
 
@@ -36,15 +37,15 @@ void swap_out(void *upage) {
 	disk_sector_t sec_no;
 
 	lock_acquire(&swap_lock);
-	int index = swap_bitmap_scan();
+	int id = swap_bitmap_scan();
 	int count = 0;
 	
-	if (index == -1)
+	if (id == -1)
 		PANIC("No empty space in swap disk");
 
-	sec_no = index * number_of_page;
+	sec_no = id * number_of_page;
 
-	struct swap *s = swap_alloc(index, upage);
+	struct swap *s = swap_alloc(id, upage);
 
 	void *upage_offs = upage;
 
@@ -58,7 +59,7 @@ void swap_out(void *upage) {
 	}
 	ASSERT(count == 8);
 
-	swap_bitmap.used_map[index] = 1;
+	swap_bitmap.used_map[id] = 1;
 	swap_bitmap.count ++;
 
 	lock_release(&swap_lock);
@@ -66,12 +67,24 @@ void swap_out(void *upage) {
 	//swap_print_table();
 }
 
-void swap_in(void *upage, void *dest) {
+void swap_in(void *upage) {
 
 	struct swap *s = swap_get_by_upage(upage);
 
 	if (s == NULL)
 		PANIC("No such user page in swap disk");
+
+	int index, id = s->id;
+
+	for (index = 0; index < 8; index ++) {
+		disk_read(d, s->sec_nos[index], upage);
+		upage += PGSIZE;
+	}
+
+
+	swap_free(s);
+	swap_bitmap.used_map[id] = 0;
+	swap_bitmap.count--;
 
 	// copy data
 	//disk_read(d, );
@@ -103,6 +116,14 @@ int swap_bitmap_scan() {
 
 struct swap *swap_get_by_upage(void *upage) {
 	
+	tid_t curr_tid = thread_current()->tid;
+	struct list_elem *e;
+	for (e = list_begin(&swap_list); e != list_end(&swap_list); e = list_next(e)) {
+		struct swap *s = list_entry(e, struct swap, elem);
+		if (s->upage == upage && s->tid == curr_tid)
+			return s;
+	}
+
 	return NULL;
 }
 
@@ -132,12 +153,18 @@ static struct swap *swap_alloc(int id, void *upage) {
 	s->id = id;
 	s->tid = thread_current()->tid;
 	s->upage = upage;
+
 	list_push_back(&swap_list, &s->elem);
 
 	return s;
 }
 
-
+static void swap_free(struct swap *s) {
+	lock_acquire(&swap_lock);
+	list_remove(&s->elem);
+	lock_release(&swap_lock);
+	free(s);
+}
 
 
 
