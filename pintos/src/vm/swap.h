@@ -15,9 +15,6 @@ struct bitmap {
 	int *used_map;
 };
 
-static int max_disk_size;
-static int number_of_page;
-
 struct swap {
 	int id;
 	tid_t tid;

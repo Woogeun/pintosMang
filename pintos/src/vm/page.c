@@ -6,6 +6,8 @@
 #include "threads/palloc.h"
 #include "threads/interrupt.h"
 #include "userprog/process.h"
+#include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 
 #include "vm/frame.h"
 #include "vm/swap.h"
@@ -205,7 +207,7 @@ install_page (void *upage, void *kpage, bool writable)
 
 void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
 
-  page_print_table();
+  //page_print_table();
   
   printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
 
@@ -219,6 +221,7 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
       struct frame *f = frame_get_page(PAL_USER, p->upage);
       swap_in(p->upage);
       p->position = ON_MEMORY;
+      install_page(p->upage, f->kpage, write);
     } else if (p->position == ON_MEMORY) {
       PANIC("no reason for page fault");
     }

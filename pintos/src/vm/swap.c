@@ -6,11 +6,13 @@
 #include "devices/disk.h"
 #include <debug.h>
 #include <stdio.h>
+#include <string.h>
 
 struct bitmap swap_bitmap;
 struct disk *d;
 
 static void swap_print_table(void);
+static int swap_bitmap_scan(void);
 static struct swap *swap_alloc(int, void *);
 static void swap_free(struct swap *);
 
@@ -20,11 +22,9 @@ void swap_init(void) {
 	lock_init(&swap_lock);
 
 	d = disk_get(1,1);
-	max_disk_size = disk_size(d);
-	number_of_page = PGSIZE / DISK_SECTOR_SIZE;
 
 	swap_bitmap.count = 0;
-	swap_bitmap.max = max_disk_size / number_of_page;
+	swap_bitmap.max = disk_size(d) / (PGSIZE / DISK_SECTOR_SIZE);
 	swap_bitmap.used_map = (int *) malloc (sizeof(int) * swap_bitmap.max);
 	memset(swap_bitmap.used_map, 0, swap_bitmap.max);
 }
@@ -43,7 +43,7 @@ void swap_out(void *upage) {
 	if (id == -1)
 		PANIC("No empty space in swap disk");
 
-	sec_no = id * number_of_page;
+	sec_no = id * (PGSIZE / DISK_SECTOR_SIZE);
 
 	struct swap *s = swap_alloc(id, upage);
 
@@ -81,19 +81,12 @@ void swap_in(void *upage) {
 		upage += PGSIZE;
 	}
 
-
 	swap_free(s);
 	swap_bitmap.used_map[id] = 0;
 	swap_bitmap.count--;
-
-	// copy data
-	//disk_read(d, );
-	// remove list
-	// bitmap update
-	
 }
 
-int swap_bitmap_scan() {
+static int swap_bitmap_scan() {
 	int *map = swap_bitmap.used_map;
 	int i, max = swap_bitmap.max;
 	for (i = 0; i < max; i++)
@@ -102,17 +95,6 @@ int swap_bitmap_scan() {
 	return -1;
 }
 
-// void swap_add_list(struct list *slot_list, void *upage, disk_sector_t sec_no) {
-// 	struct swap_slot *s = (struct swap_slot *) malloc (sizeof(struct swap_slot));
-// 	s->tid = thread_current()->tid;
-// 	s->upage = upage;
-// 	s->sec_no = sec_no;
-// 	list_push_back(slot_list, &s->elem);
-// }
-
-// void swap_remove_list() {
-
-// }
 
 struct swap *swap_get_by_upage(void *upage) {
 	
@@ -120,8 +102,9 @@ struct swap *swap_get_by_upage(void *upage) {
 	struct list_elem *e;
 	for (e = list_begin(&swap_list); e != list_end(&swap_list); e = list_next(e)) {
 		struct swap *s = list_entry(e, struct swap, elem);
-		if (s->upage == upage && s->tid == curr_tid)
-			return s;
+		if (s->tid == curr_tid)
+			if (s->upage == upage)
+				return s;
 	}
 
 	return NULL;
@@ -133,7 +116,7 @@ static void swap_print_table() {
 	printf("====================== swap table ====================\n");
 	for (e = list_begin(&swap_list); e != list_end(&swap_list); e = list_next(e)) {
 		struct swap *s = list_entry(e, struct swap, elem);
-		printf("id: %2d, tid: %2d, upage: 0x%8x\n", s->id, s->tid, s->upage);
+		printf("id: %2d, tid: %2d, upage: 0x%8x\n", s->id, s->tid, (unsigned) s->upage);
 	}
 	printf("======================================================\n");
 }
