@@ -7,6 +7,7 @@
 #include "threads/thread.h"
 
 #define STACK_INITIAL_UPAGE PHYS_BASE - PGSIZE
+#define UPAGE_BOTTOM 0x08048000
 
 enum page_position {
 	ON_DISK,
@@ -15,11 +16,14 @@ enum page_position {
 };
 
 struct page {
+	struct thread *thread;
 	void *upage;
 	bool writable;
 	enum page_position position;
 	struct hash_elem elem;
 };
+
+struct hash page_hash;
 
 void page_init(void);
 

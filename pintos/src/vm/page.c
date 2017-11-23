@@ -14,75 +14,91 @@
 #include <string.h>
 #include <stdio.h>
 
-static void page_print_table(struct thread *);
+static unsigned hash_func (const struct hash_elem *, void *);
+static bool less_func (const struct hash_elem *, const struct hash_elem *, void *);
+
+static unsigned hash_func (const struct hash_elem *e, void *aux UNUSED) {
+
+  struct page *p = hash_entry(e, struct page, elem);
+  return hash_int((int) p->upage);
+}
+
+static bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+
+  struct page *cmp1 = hash_entry(a, struct page, elem);
+  struct page *cmp2 = hash_entry(b, struct page, elem);
+  return cmp1->upage < cmp2->upage;
+}
+
+static void page_print_table(void);
 static bool is_stack_growth(void *, void *);
 
-static void page_print_table(struct thread *t) {
+static void page_print_table(void) {
 
   enum intr_level old_level = intr_disable();
 
-  printf("===============thread %2d==============\n", t->tid);
+  printf("=============== page table ==============\n");
   size_t i;
-  struct hash *h = &t->page_table;
-    for (i = 0; i < h->bucket_cnt; i++) {
-        struct list *bucket = &h->buckets[i];
+    for (i = 0; i < page_hash.bucket_cnt; i++) {
+        struct list *bucket = &page_hash.buckets[i];
         struct list_elem *elem, *next;
 
         for (elem = list_begin (bucket); elem != list_end (bucket); elem = next) {
           next = list_next(elem);
           struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
           struct page *p = hash_entry(he, struct page, elem);
-          printf("upage: 0x%8x, position: %6s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap");
+          printf("tid: %2d, upage: 0x%8x, position: %6s\n", p->thread->tid, p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap");
         }
     }
-    printf("======================================%d\n", h->elem_cnt);   
+    printf("======================================%d\n", page_hash.elem_cnt);   
     intr_set_level(old_level); 
 }
 
 void page_init(void) {
-	
+	hash_init(&page_hash, hash_func, less_func, NULL);
 }
 
 void page_add_hash(void *upage, bool writable, enum page_position position) {
 	struct page *p = (struct page *) malloc (sizeof(struct page));
+  p->thread = thread_current();
 	p->upage = upage;
 	p->writable = writable;
   p->position = position;
-	hash_insert(&thread_current()->page_table, &p->elem);
+	hash_insert(&page_hash, &p->elem);
 }
 
 void page_remove_hash(void *upage) {
 	struct page *p = page_get_by_upage(upage);
 	if (p == NULL)
 		PANIC("no such page in current thread");
-	hash_delete(&thread_current()->page_table, &p->elem);
-	frame_free_page(upage);
+	hash_delete(&page_hash, &p->elem);
+	//frame_free_page(upage);
 	free(p);
 }
 
 struct page *page_get_by_upage(void *upage) {
-	size_t i;
-	struct hash *h = &thread_current()->page_table;
-  	for (i = 0; i < h->bucket_cnt; i++) {
-       	struct list *bucket = &h->buckets[i];
-      	struct list_elem *elem, *next;
+  //page_print_table();
+  //printf("<<upage: 0x%8x>>\n", upage);
+  struct page *p_ = (struct page *) malloc (sizeof(struct page));
+  struct page *result = NULL;
+  p_->upage = upage;
+  struct hash_elem *he = hash_find(&page_hash, &p_->elem);
 
-      	for (elem = list_begin (bucket); elem != list_end (bucket); elem = next) {
-      		next = list_next(elem);
-      		struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
-      		struct page *p = hash_entry(he, struct page, elem);
-          	if (p->upage == upage)
-          		return p;
-        }
-    }    
+  free(p_);
+
+  if (he == NULL)
     return NULL;
+
+  struct page *p = hash_entry(he, struct page, elem);
+  return p;
 }
 
 bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+
+  //printf("<<page_load_segment: read %d, zero %d\n", read_bytes, zero_bytes);
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   	ASSERT (pg_ofs (upage) == 0);
   	ASSERT (ofs % PGSIZE == 0);
-    //printf("<<1>>\n");
 
     //page_print_table(thread_current());
 
@@ -96,11 +112,12 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
       	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      	uint8_t *kpage = frame_get_page (PAL_USER, upage);
+        struct frame *frame = frame_get_page (PAL_USER, upage);
+      	uint8_t *kpage = frame->kpage;
 
       /* Load this page. */
       	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-          	frame_free_page(kpage);
+          	frame_free_page(frame);
           	return false; 
         }
       //printf("<<7>>\n");
@@ -108,7 +125,7 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
 
       /* Add the page to the process's address space. */
       	if (!install_page (upage, kpage, writable)) {
-          	frame_free_page(kpage);
+          	frame_free_page(frame);
           	return false; 
         }
         
@@ -119,30 +136,33 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
       	zero_bytes -= page_zero_bytes;
       	upage += PGSIZE;
     }
-
     
   	return true;
 }
 
 bool page_setup_stack (void **esp, int argc, char **argv) 
 {
+  //printf("<<page_setup_stack>>\n");
 
+  struct frame *frame;
   uint8_t *kpage;
   bool success = false;
 
   //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  kpage = frame_get_page(PAL_USER | PAL_ZERO, STACK_INITIAL_UPAGE);
+  
+  frame = frame_get_page(PAL_USER | PAL_ZERO, STACK_INITIAL_UPAGE);
+  kpage = frame->kpage;
 
   success = install_page (STACK_INITIAL_UPAGE, kpage, true);
   if (success)
     *esp = PHYS_BASE;
   else {
     //palloc_free_page (kpage);
-    frame_free_page(kpage);
+    frame_free_page(frame);
     return false;
   }
 
-  page_add_hash(kpage, true, ON_MEMORY);
+  page_add_hash(STACK_INITIAL_UPAGE, true, ON_MEMORY);
   
   int i;
   size_t len;
@@ -202,32 +222,60 @@ install_page (void *upage, void *kpage, bool writable)
 
 void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
 
-  if (is_stack_growth(esp, fault_addr)) {  //stack_growth
-    //printf("==========stack_growth!!!!!\n");
-    uint8_t *kpage = frame_get_page(PAL_USER, STACK_INITIAL_UPAGE);
-    
-    if (!install_page(pg_round_down(fault_addr), kpage, write)) {
-      frame_free_page(kpage);
+  //page_print_table();
+  
+  printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
+
+  struct page *p = page_get_by_upage(pg_round_down(fault_addr));
+  if (p != NULL) {
+    // page_print_table();
+    //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
+    // if (p->position == ON_SWAP) {
+    //   //swap_in(p->upage);
+    // } else if (p->position == ON_MEMORY) {
+
+    // }
+    exit(-1);
+  }
+  else if (is_stack_growth(esp, fault_addr)) {  //stack_growth
+    struct frame *frame;
+    uint8_t *upage = pg_round_down(fault_addr);
+    uint8_t *kpage;
+    frame = frame_get_page(PAL_USER, upage);
+    kpage = frame->kpage;
+    if (!install_page(upage, kpage, write)) {
+      frame_free_page(frame);
       PANIC("stack growth failure");
     }
-
-    page_add_hash(kpage, write, ON_MEMORY);
-
-  } else {                  //swap_in
-    //page_print_table(thread_current());
-
-    struct page *p = page_get_by_upage(pg_round_down(fault_addr));
-    if (p == NULL) 
-      exit(-1);
-    //printf("<<p is not NULL>>\n");
-    //struct swap *s = swap_get_by_upage(fault_addr);
-    //printf("is there in disk?: %s\n", s==NULL ? "no" : "yes");
+    page_add_hash(upage, write, ON_MEMORY);
+    
+  } else {                 
+    
+    exit(-1);
   }
 }
 
 static bool is_stack_growth(void *esp, void *fault_addr) {
-  return fault_addr >= esp - 32;
+  bool compare = fault_addr - esp + 32 >= 0;
+  bool result = compare && fault_addr >= UPAGE_BOTTOM;
+  printf("<<is stack growth: %d>>: %s\n", fault_addr - esp + 32, result ? "yes" : "no");
+  return result;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

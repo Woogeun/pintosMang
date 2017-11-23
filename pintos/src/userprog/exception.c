@@ -155,17 +155,19 @@ page_fault (struct intr_frame *f)
      which fault_addr refers. */
 
   if (!not_present) {
+    //printf("<<1>>\n");
     exit(-1);
+    //printf("<<2>>\n");
     printf ("Page fault at %p: %s error %s page in %s context.\n",
         fault_addr,
         not_present ? "not present" : "rights violation",
         write ? "writing" : "reading",
         user ? "user" : "kernel");
+    //printf("<<3>>\n");
     kill (f);  
+    //printf("<<4>>\n");
   } else {
-    //printf(" esp: 0x%8x\naddr: 0x%8x\n", f->esp, fault_addr);
     page_fault_handler(f->esp, fault_addr, write, user);
-
   }
 }
 

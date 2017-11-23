@@ -95,6 +95,7 @@ void exit(int status) {
 }
 
 tid_t exec(const char *cmd_line) {
+	//printf("<<exec>>\n");
 
 	if (!valid_address((void *) cmd_line))
 		exit(-1);
@@ -104,11 +105,13 @@ tid_t exec(const char *cmd_line) {
 }
 
 int wait(tid_t tid) {
+	//printf("<<wait>>\n");
 	int status = process_wait(tid);
 	return status;
 }
 
 bool create(const char *file, unsigned size) {
+	//printf("<<create>>\n");
 	if (!valid_address((void *) file))
 		exit(-1);
 
@@ -142,6 +145,7 @@ bool remove(const char *file) {
 }
 
 int open(const char *file_name) {
+	//printf("<<open>>\n");
 	if (!valid_address((void *) file_name))
 		exit(-1);
 
@@ -182,14 +186,9 @@ int filesize(int fd) {
 }
 
 int read(int fd, char *buffer, size_t size) {
-	if (!valid_address((void *) buffer)) {
-		if ((unsigned) buffer < (unsigned) PHYS_BASE) {
-			uint32_t *pd = active_pd();
-			pagedir_set_accessed(pd, buffer, true);
-		}
-		else 
-			exit(-1);
-	}
+	//printf("<<read>>\n");
+	if (!valid_address((void *) buffer))
+		exit(-1);
 
 	//stdin
 	if (fd == 0) {
@@ -214,6 +213,7 @@ int read(int fd, char *buffer, size_t size) {
 }
 
 int write(int fd, const char *buffer, size_t size) {
+
 	if (!valid_address((void *) buffer))
 		exit(-1);
 
@@ -263,6 +263,7 @@ unsigned tell(int fd) {
 }
 
 void close(int fd) {
+	//printf("<<close>>\n");
 	if (fd == 0 || fd == 1) 
 		exit(-1);
 
@@ -331,8 +332,13 @@ int return_args(struct intr_frame *f, int order) {
 bool valid_address(const void *address) {
 	uint32_t *pd = active_pd();
 
-	bool valid = pagedir_is_accessed(pd, address);
-	if (!is_user_vaddr(address)) valid = false;
+	if (!is_user_vaddr(address) || address <= UPAGE_BOTTOM) 
+		return false;
+
+	bool valid = true;
+
+	if (!page_get_by_upage(pg_round_down(address))) valid = false;
+	
 	return valid; 
 }
 
@@ -503,28 +509,6 @@ void free_child_list() {
 	}
 }
 
-
-//about page allocation
-void free_page() {
-	struct thread *curr = thread_current();
-	struct hash *h = &curr->page_table;
-	size_t i;
-
-	for (i = 0; i < h->bucket_cnt; i++) {
-       	struct list *bucket = &h->buckets[i];
-      	struct list_elem *elem, *next;
-
-      	for (elem = list_begin (bucket); elem != list_end (bucket); elem = next) {
-      		next = list_next(elem);
-      		struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
-      		struct page *p = hash_entry(he, struct page, elem);
-      		//void *vaddr = p->vaddr;
-          	hash_delete(h, &p->elem);
-          	//frame_free_page(vaddr);
-          	free(p);
-        }
-    }    
-}
 
 
 

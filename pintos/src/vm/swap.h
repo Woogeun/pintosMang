@@ -4,28 +4,33 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "devices/disk.h"
-#include <hash.h>
-
+#include <list.h>
 
 struct lock swap_lock;
-struct hash swap_hash;
+struct list swap_list;
+
+struct bitmap {
+	int count;
+	int max;
+	int *used_map;
+};
 
 static int max_disk_size;
-static disk_sector_t sec_no;
-static int cnt;
+static int number_of_page;
 
 struct swap {
+	int id;
 	tid_t tid;
 	void *upage;
-	disk_sector_t sec_no;
-	struct hash_elem elem;
+	disk_sector_t sec_nos[8];
+	struct list_elem elem;
 };
 
 void swap_init(void);
 void swap_out(void *);
-void *swap_in(void);
-void swap_add_hash(void *);
-void swap_remove_hash(void);
+void swap_in(void *, void *);
+void swap_add_list(struct list *, void *, disk_sector_t);
+void swap_remove_list(void);
 struct swap *swap_get_by_upage(void *);
 
 #endif

@@ -114,7 +114,7 @@ struct thread
     struct file *file;                  /* current thread file */
     struct thread *parent;              /* pointing parent thread */  
 
-    struct hash page_table;             /* manage page table defined in "vm/page.h" */     
+    //struct hash page_table;             /* manage page table defined in "vm/page.h" */     
   };
 
 

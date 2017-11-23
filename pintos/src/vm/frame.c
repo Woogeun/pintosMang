@@ -14,51 +14,55 @@ void frame_init(void) {
 }
 
 void *frame_get_page(enum palloc_flags flags, void *upage) {
+	//printf("<<frame_get_page>>\n");
 
 	void *kpage = palloc_get_page(flags);
 
 	if (kpage == NULL) {
-		void *evicted_kpage = frame_evict_page();
-
-		if (evicted_kpage == NULL)
+		struct frame *evicted = frame_evict_page();
+		void *evicted_upage;
+		if (evicted == NULL)
 			PANIC("no frame to evict");
 
-		swap_out(evicted_kpage);
-		frame_free_page(evicted_kpage);
+		evicted_upage = evicted->upage;
+		swap_out(evicted_upage);
+		frame_free_page(evicted);
 
+		struct page *p = page_get_by_upage(evicted_upage);
+		if (p == NULL)
+			PANIC("no such page in page table. ");
+		p->position = ON_SWAP;
 		kpage = palloc_get_page (flags);
-	}
 
-	if (kpage == NULL)
-		PANIC("no frame to alloc after evict frame");
+		if (kpage == NULL)
+			PANIC("no frame to alloc after evict frame");
+	}
 
 	struct frame *f = (struct frame *) malloc (sizeof(struct frame));
 	f->kpage = kpage;
 	f->upage = upage;
 
 	frame_add_list(f);
+	//printf("<<frame_get_page<kpage, upage>: <0x%8x, 0x%8x>>>\n", f->kpage, f->upage);
 
-	return kpage;
+	return f;
 }
 
 
-void frame_free_page(void *kpage) {
-
-	struct frame *f = frame_get_by_kpage(kpage, true);
-	if (f == NULL)
-		PANIC("no such upage in frame list");
+void frame_free_page(struct frame *f) {
+	
 	palloc_free_page(f->kpage);
+	list_remove(&f->elem);
 	free(f);
 }
 
-void *frame_evict_page(void) {
+struct frame *frame_evict_page(void) {
+	//printf("<<frame_evict_page>>\n");
 
 	struct frame *f = list_entry(list_begin(&frame_list), struct frame, elem);
 	if (f == NULL)
 		PANIC("No frame to evict");
-	struct page *p = page_get_by_upage(f->upage);
-	p->position = ON_SWAP;
-	return f->kpage;
+	return f;
 }
 
 void frame_add_list(struct frame *f) {
