@@ -24,8 +24,8 @@ struct swap {
 };
 
 void swap_init(void);
-void swap_out(void *);
-void swap_in(void *);
+void swap_out(void *, void *);
+void swap_in(void *, void *);
 void swap_add_list(struct list *, void *, disk_sector_t);
 void swap_remove_list(void);
 struct swap *swap_get_by_upage(void *);

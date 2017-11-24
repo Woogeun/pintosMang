@@ -36,7 +36,7 @@ static void page_print_table(void) {
           next = list_next(elem);
           struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
           struct page *p = hash_entry(he, struct page, elem);
-          printf("upage: 0x%8x, position: %6s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap");
+          printf("upage: 0x%8x, position: %6s, writable: %s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap", p->writable ? "writable" : "non-writable");
         }
     }
     printf("==========================================\n");   
@@ -60,7 +60,6 @@ void page_remove_hash(void *upage) {
 	if (p == NULL)
 		PANIC("no such page in current thread");
 	hash_delete(&thread_current()->page_hash, &p->elem);
-	//frame_free_page(upage);
 	free(p);
 }
 
@@ -135,6 +134,7 @@ bool page_setup_stack (void **esp, int argc, char **argv)
 
   //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   
+  //printf("<< page_setup_stack | STACK_INITIAL_UPAGE : 0x%8x >>\n", STACK_INITIAL_UPAGE);
   frame = frame_get_page(PAL_USER | PAL_ZERO, STACK_INITIAL_UPAGE);
   kpage = frame->kpage;
 
@@ -205,29 +205,47 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
+void page_fault_handler(void *esp, void *fault_addr, bool write, bool user, bool not_present) {
 
   //page_print_table();
+  //debug_backtrace();
   
-  printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
+
+  //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(fault_addr));
+
+
 
   struct page *p = page_get_by_upage(pg_round_down(fault_addr));
+  //printf("alive1?\n");
+
+  printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
+  //printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
+  if (!not_present){
+    //page_print_table();
+    //printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
+    printf("<< invalid access >>\n");  
+    exit(-1);
+  }
+
   if (p != NULL) {
-    page_print_table();
-    printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
-    printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
+    //page_print_table();
+    //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
+    //printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
 
     if (p->position == ON_SWAP) {
+      printf("<< swap in!! >>\n");
       struct frame *f = frame_get_page(PAL_USER, p->upage);
-      swap_in(p->upage);
+      swap_in(f->kpage, p->upage);
       p->position = ON_MEMORY;
-      install_page(p->upage, f->kpage, write);
+      if (!install_page(p->upage, f->kpage, write)){
+        PANIC("install fail!!! why??");
+      }
     } else if (p->position == ON_MEMORY) {
       PANIC("no reason for page fault");
     }
-    exit(-1);
   }
   else if (is_stack_growth(esp, fault_addr)) {  //stack_growth
+    printf("<< stack growth >>\n");
     struct frame *frame;
     uint8_t *upage = pg_round_down(fault_addr);
     uint8_t *kpage;
@@ -240,7 +258,8 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
     page_add_hash(upage, write, ON_MEMORY);
     
   } else {                 
-    
+    printf("<< invalid stack growth >>\n");
+    printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
     exit(-1);
   }
 }
@@ -248,7 +267,7 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user) {
 static bool is_stack_growth(void *esp, void *fault_addr) {
   bool compare = fault_addr - esp + 32 >= 0;
   bool result = compare && fault_addr >= UPAGE_BOTTOM;
-  printf("<<is stack growth: %d>>: %s\n", fault_addr - esp + 32, result ? "yes" : "no");
+  //printf("<<is stack growth: %d>>: %s\n", fault_addr - esp + 32, result ? "yes" : "no");
   return result;
 }
 

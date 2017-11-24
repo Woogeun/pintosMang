@@ -31,7 +31,7 @@ void swap_init(void) {
 
 
 
-void swap_out(void *upage) {
+void swap_out(void *kpage, void *upage) {
 
 	size_t remained = PGSIZE;
 	disk_sector_t sec_no;
@@ -47,13 +47,11 @@ void swap_out(void *upage) {
 
 	struct swap *s = swap_alloc(id, upage);
 
-	void *upage_offs = upage;
-
 	while (remained > 0) {
-		disk_write(d, sec_no, upage_offs);
+		disk_write(d, sec_no, kpage);
 		s->sec_nos[count] = sec_no;
 		sec_no++;
-		upage_offs += DISK_SECTOR_SIZE;
+		kpage += DISK_SECTOR_SIZE;
 		remained -= DISK_SECTOR_SIZE;
 		count ++;
 	}
@@ -67,7 +65,7 @@ void swap_out(void *upage) {
 	//swap_print_table();
 }
 
-void swap_in(void *upage) {
+void swap_in(void *kpage, void *upage) {
 
 	struct swap *s = swap_get_by_upage(upage);
 
@@ -77,8 +75,8 @@ void swap_in(void *upage) {
 	int index, id = s->id;
 
 	for (index = 0; index < 8; index ++) {
-		disk_read(d, s->sec_nos[index], upage);
-		upage += PGSIZE;
+		disk_read(d, s->sec_nos[index], kpage);
+		kpage += DISK_SECTOR_SIZE;
 	}
 
 	swap_free(s);

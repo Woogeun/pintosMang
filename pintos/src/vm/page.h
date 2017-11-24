@@ -34,7 +34,7 @@ struct page *page_get_by_upage(void *);
 bool page_load_segment(struct file *, off_t, uint8_t *, uint32_t, uint32_t, bool);
 bool page_setup_stack(void **, int, char **);
 bool install_page(void *, void *, bool);
-void page_fault_handler(void *, void *, bool, bool);
+void page_fault_handler(void *, void *, bool, bool, bool);
 
 
 #endif

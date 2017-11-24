@@ -7,6 +7,22 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
+static void frame_print_table(int);
+
+static void frame_print_table(int count) {
+	struct list_elem *e;
+	int c = 0;
+	printf("===================== frame list ==================\n");
+	for (e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)) {
+		if (c ++ >= count)
+			break;
+		struct frame *f = list_entry(e, struct frame, elem);	
+		printf("upage : 0x%8x, kpage : 0x%8x\n", f->upage, f->kpage);
+
+	}
+	printf("====================================================\n");
+}
+
 void frame_init(void) {
 
 	list_init(&frame_list);
@@ -20,17 +36,24 @@ void *frame_get_page(enum palloc_flags flags, void *upage) {
 
 	if (kpage == NULL) {
 		struct frame *evicted = frame_evict_page();
-		void *evicted_upage;
 		if (evicted == NULL)
 			PANIC("no frame to evict");
 
-		evicted_upage = evicted->upage;
-		swap_out(evicted_upage);
+		void *evicted_upage = evicted->upage;
+		//printf("<< kpage before: 0x%8x\n", evicted->kpage);	
+		swap_out(evicted->kpage, evicted_upage); // swap하면 
+		//printf("<< kpage before: 0x%8x, upage : 0x%8x\n", evicted->kpage, evicted_upage);	
+
+		pagedir_clear_page(thread_current()->pagedir, evicted_upage);
 		frame_free_page(evicted);
+		
 
 		struct page *p = page_get_by_upage(evicted_upage);
 		if (p == NULL)
 			PANIC("no such page in page table. ");
+		//printf("<< upage evict : 0x%8x, upage fault : 0x%8x\n", p->upage, upage);	
+		//debug_backtrace();
+		//frame_print_table(2);
 		p->position = ON_SWAP;
 		kpage = palloc_get_page (flags);
 
@@ -44,22 +67,26 @@ void *frame_get_page(enum palloc_flags flags, void *upage) {
 
 	frame_add_list(f);
 	//printf("<<frame_get_page<kpage, upage>: <0x%8x, 0x%8x>>>\n", f->kpage, f->upage);
+	
 
 	return f;
 }
 
 
 void frame_free_page(struct frame *f) {
-	
+	lock_acquire(&frame_lock);
+
 	palloc_free_page(f->kpage);
 	list_remove(&f->elem);
 	free(f);
+
+	lock_release(&frame_lock);
 }
 
 struct frame *frame_evict_page(void) {
-	//printf("<<frame_evict_page>>\n");
 
 	struct frame *f = list_entry(list_begin(&frame_list), struct frame, elem);
+
 	if (f == NULL)
 		PANIC("No frame to evict");
 	return f;

@@ -4,6 +4,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
@@ -153,9 +154,14 @@ page_fault (struct intr_frame *f)
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-
+  page_fault_handler(f->esp, fault_addr, write, user, not_present);
+  /*
   if (!not_present) {
     //printf("<<1>>\n");
+    //printf(" esp: 0x%8x\naddr: 0x%8x\n", f->esp, fault_addr);
+    printf("<< invalid access >>\n");
+    //struct page *p = page_get_by_upage(pg_round_down(fault_addr));
+    //printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
     exit(-1);
     //printf("<<2>>\n");
     printf ("Page fault at %p: %s error %s page in %s context.\n",
@@ -167,8 +173,9 @@ page_fault (struct intr_frame *f)
     kill (f);  
     //printf("<<4>>\n");
   } else {
-    page_fault_handler(f->esp, fault_addr, write, user);
+    page_fault_handler(f->esp, fault_addr, write, user, not_present);
   }
+  */
 }
 
 
