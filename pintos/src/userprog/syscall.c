@@ -15,6 +15,7 @@
 #include "userprog/process.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 #include "devices/input.h"
 
 
@@ -75,6 +76,7 @@ void exit(int status) {
 
 	free_child_list();
   	free_file_list();
+  	free_page();
 
   	awake_wait_thread(status);
 
@@ -186,9 +188,10 @@ int filesize(int fd) {
 }
 
 int read(int fd, char *buffer, size_t size) {
-	//printf("<<read>>\n");
-	if (!valid_address((void *) buffer))
+	if (!valid_address((void *) buffer)){
+		//printf("<<non valid address>>\n");
 		exit(-1);
+	}
 
 	//stdin
 	if (fd == 0) {
@@ -213,7 +216,7 @@ int read(int fd, char *buffer, size_t size) {
 }
 
 int write(int fd, const char *buffer, size_t size) {
-
+	//printf("<< wwrite >>\n");
 	if (!valid_address((void *) buffer))
 		exit(-1);
 
@@ -335,11 +338,18 @@ bool valid_address(const void *address) {
 	if (!is_user_vaddr(address) || address <= UPAGE_BOTTOM) 
 		return false;
 
-	bool valid = true;
-
-	if (!page_get_by_upage(pg_round_down(address))) valid = false;
-	
-	return valid; 
+	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
+	if (p == NULL){
+		//page_grow_stack(address);
+		//page_print_table();
+		return false;
+	}
+	if (p->position == ON_SWAP){
+		page_print_table();
+		//printf("good swap to memory in read \n");
+		page_load_from_swap(p);
+	}
+	return true;
 }
 
 bool is_child(struct thread *t, tid_t tid) {
@@ -509,7 +519,27 @@ void free_child_list() {
 	}
 }
 
+void free_page() {
+	struct list_elem *e = list_begin(&frame_list);
+	while (e != list_tail(&frame_list)) {
+		struct frame *f = list_entry(e, struct frame, elem);
+		e = list_next(e);
+		struct thread *curr = thread_current();
+		if (curr == f->thread){
+			//printf("<<match>>\n");
+			frame_free_page(f);
+		}
+	}
 
+	tid_t curr_tid = thread_current()->tid;
+	e = list_begin(&swap_list);
+	while (e != list_tail(&swap_list)) {
+		struct swap *s = list_entry(e, struct swap, elem);
+		e = list_next(e);
+		if (s->tid == curr_tid)
+			swap_free(s);
+	}
+}
 
 
 

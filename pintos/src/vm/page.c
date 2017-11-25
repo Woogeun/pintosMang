@@ -17,10 +17,10 @@
 #include <stdio.h>
 
 
-static void page_print_table(void);
+
 static bool is_stack_growth(void *, void *);
 
-static void page_print_table(void) {
+void page_print_table(void) {
 
   enum intr_level old_level = intr_disable();
 
@@ -44,110 +44,112 @@ static void page_print_table(void) {
 }
 
 void page_init(void) {
-	//hash_init(&page_hash, hash_func, less_func, NULL);
+	lock_init(&page_lock);
 }
 
 void page_add_hash(void *upage, bool writable, enum page_position position) {
+  //lock_acquire(&page_lock);
+
 	struct page *p = (struct page *) malloc (sizeof(struct page));
 	p->upage = upage;
 	p->writable = writable;
   p->position = position;
 	hash_insert(&thread_current()->page_hash, &p->elem);
+
+  //lock_release(&page_lock);
 }
 
 void page_remove_hash(void *upage) {
-	struct page *p = page_get_by_upage(upage);
+	struct page *p = page_get_by_upage(thread_current(), upage);
 	if (p == NULL)
 		PANIC("no such page in current thread");
 	hash_delete(&thread_current()->page_hash, &p->elem);
 	free(p);
 }
 
-struct page *page_get_by_upage(void *upage) {
+struct page *page_get_by_upage(struct thread *t, void *upage) {
+  //lock_acquire(&page_lock);
 
-  struct page *p_ = (struct page *) malloc (sizeof(struct page));
-  p_->upage = upage;
-  struct hash_elem *he = hash_find(&thread_current()->page_hash, &p_->elem);
-  free(p_);
+  struct page p;
+  p.upage = upage;
+  ASSERT(&t->page_hash != NULL);
+  struct hash_elem *he = hash_find(&t->page_hash, &p.elem);
 
-  if (he == NULL)
+  if (he == NULL){
+    
+    //printf("<< no such page : 0x%8x >>\n", upage);
+
+    //lock_release(&page_lock);
     return NULL;
+  }
 
-  struct page *p = hash_entry(he, struct page, elem);
-  return p;
+  //lock_release(&page_lock);
+
+  return hash_entry(he, struct page, elem);
+  
 }
 
 bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-
-  //printf("<<page_load_segment: read %d, zero %d\n", read_bytes, zero_bytes);
+  
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  	ASSERT (pg_ofs (upage) == 0);
-  	ASSERT (ofs % PGSIZE == 0);
+	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (ofs % PGSIZE == 0);
 
-    //page_print_table(thread_current());
+	file_seek (file, ofs);
+	while (read_bytes > 0 || zero_bytes > 0) {
+    lock_acquire(&page_lock);
 
-  	file_seek (file, ofs);
-  	while (read_bytes > 0 || zero_bytes > 0) {
-      //printf("<<2>>\n");
-      /* Do calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+    /* Do calculate how to fill this page.
+       We will read PAGE_READ_BYTES bytes from FILE
+       and zero the final PAGE_ZERO_BYTES bytes. */
+    	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-        struct frame *frame = frame_get_page (PAL_USER, upage);
-      	uint8_t *kpage = frame->kpage;
+    /* Get a page of memory. */
+      struct frame *f = frame_get_page (PAL_USER, upage);
 
-      /* Load this page. */
-      	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-          	frame_free_page(frame);
-          	return false; 
-        }
-      //printf("<<7>>\n");
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+    /* Load this page. */
+    	if (file_read (file, f->kpage, page_read_bytes) != (int) page_read_bytes) {
+        	frame_free_page(f);
+        	return false; 
+      }
 
-      /* Add the page to the process's address space. */
-      	if (!install_page (upage, kpage, writable)) {
-          	frame_free_page(frame);
-          	return false; 
-        }
-        
-        page_add_hash(upage, writable, ON_MEMORY);
+    memset (f->kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Advance. */
-      	read_bytes -= page_read_bytes;
-      	zero_bytes -= page_zero_bytes;
-      	upage += PGSIZE;
-    }
-    
-  	return true;
+    /* Add the page to the process's address space. */
+    	if (!install_page (f->upage, f->kpage, writable)) {
+        	frame_free_page(f);
+        	return false; 
+      }
+      
+    /* Advance. */
+    	read_bytes -= page_read_bytes;
+    	zero_bytes -= page_zero_bytes;
+    	upage += PGSIZE;
+
+      
+      page_add_hash(f->upage, writable, ON_MEMORY);
+      lock_release(&page_lock);
+  }
+
+	return true;
 }
 
 bool page_setup_stack (void **esp, int argc, char **argv) 
 {
-  //printf("<<page_setup_stack>>\n");
+  lock_acquire(&page_lock);
 
-  struct frame *frame;
-  uint8_t *kpage;
+  struct frame *f = frame_get_page(PAL_USER | PAL_ZERO, STACK_INITIAL_UPAGE);
   bool success = false;
 
-  //kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  
-  //printf("<< page_setup_stack | STACK_INITIAL_UPAGE : 0x%8x >>\n", STACK_INITIAL_UPAGE);
-  frame = frame_get_page(PAL_USER | PAL_ZERO, STACK_INITIAL_UPAGE);
-  kpage = frame->kpage;
-
-  success = install_page (STACK_INITIAL_UPAGE, kpage, true);
+  success = install_page (STACK_INITIAL_UPAGE, f->kpage, true);
   if (success)
     *esp = PHYS_BASE;
   else {
     //palloc_free_page (kpage);
-    frame_free_page(frame);
+    frame_free_page(f);
     return false;
   }
-
-  page_add_hash(STACK_INITIAL_UPAGE, true, ON_MEMORY);
   
   int i;
   size_t len;
@@ -191,6 +193,11 @@ bool page_setup_stack (void **esp, int argc, char **argv)
   memset(*esp, 0, sizeof(int));
 
   free(addresses);
+
+  
+
+  page_add_hash(STACK_INITIAL_UPAGE, true, ON_MEMORY);
+  lock_release(&page_lock);
   return success;
 }
 
@@ -207,71 +214,77 @@ install_page (void *upage, void *kpage, bool writable)
 
 void page_fault_handler(void *esp, void *fault_addr, bool write, bool user, bool not_present) {
 
-  //page_print_table();
-  //debug_backtrace();
-  
+  struct thread *curr = thread_current();
+  struct page *p = page_get_by_upage(curr, pg_round_down(fault_addr));
 
-  //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(fault_addr));
-
-
-
-  struct page *p = page_get_by_upage(pg_round_down(fault_addr));
-  //printf("alive1?\n");
-
-  printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
-  //printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
+  // invalid access detection
   if (!not_present){
-    //page_print_table();
-    //printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
-    printf("<< invalid access >>\n");  
+    if (!p->writable && write) {
+      //printf("You tried to write to non-writable page\n");
+      exit(-1);
+    }
+    //printf("<< present invalid access 0x%8x >>\n", p->upage);  
+    exit(-1);
+  }
+  if (!user){
+    //printf("<< !user invalid access 0x%8x >>\n", p->upage);
     exit(-1);
   }
 
-  if (p != NULL) {
-    //page_print_table();
-    //printf("0x%8x : I`m not null!! please load me\n", pg_round_down(esp));
-    //printf("found page is %s, and fault_addr is %s.\n", p->writable ? "writable" : "non-writable", write ? "writable" : "non-writable");
+  // page fault handler
 
-    if (p->position == ON_SWAP) {
-      printf("<< swap in!! >>\n");
-      struct frame *f = frame_get_page(PAL_USER, p->upage);
-      swap_in(f->kpage, p->upage);
-      p->position = ON_MEMORY;
-      if (!install_page(p->upage, f->kpage, write)){
-        PANIC("install fail!!! why??");
-      }
-    } else if (p->position == ON_MEMORY) {
-      PANIC("no reason for page fault");
+  if (p != NULL) {
+    if (p->position == ON_MEMORY){
+      //page_print_table();
+      //printf("<< faulted address : 0x%8x >>\n", p->upage);
+      PANIC("ON_MEMORY error");
     }
-  }
-  else if (is_stack_growth(esp, fault_addr)) {  //stack_growth
-    printf("<< stack growth >>\n");
-    struct frame *frame;
-    uint8_t *upage = pg_round_down(fault_addr);
-    uint8_t *kpage;
-    frame = frame_get_page(PAL_USER, upage);
-    kpage = frame->kpage;
-    if (!install_page(upage, kpage, write)) {
-      frame_free_page(frame);
-      PANIC("stack growth failure");
-    }
-    page_add_hash(upage, write, ON_MEMORY);
     
-  } else {                 
-    printf("<< invalid stack growth >>\n");
-    printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
+    if (p->position == ON_SWAP) {                             // if page is on swap disk, alloc new page and link them together
+      page_load_from_swap(p);
+    }
+
+  } else if (is_stack_growth(esp, fault_addr)) {              // stack_growth : 
+    page_grow_stack(fault_addr);
+  } else {                                                    // bad stack grow                
+    //printf("<< invalid stack growth >>\n");
+    //printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
     exit(-1);
   }
 }
 
 static bool is_stack_growth(void *esp, void *fault_addr) {
-  bool compare = fault_addr - esp + 32 >= 0;
-  bool result = compare && fault_addr >= UPAGE_BOTTOM;
-  //printf("<<is stack growth: %d>>: %s\n", fault_addr - esp + 32, result ? "yes" : "no");
+  bool compare = fault_addr - esp + 32 >= 0;                  // check valid address difference
+  bool result = compare && fault_addr >= UPAGE_BOTTOM;        // check address is user address
   return result;
 }
 
+void page_grow_stack(void *fault_addr) {
+  lock_acquire(&page_lock);
 
+  struct frame *f = frame_get_page(PAL_USER | PAL_ZERO, pg_round_down(fault_addr));
+  if (!install_page(f->upage, f->kpage, true)) {
+    PANIC("stack growth failure");
+  }
+  page_add_hash(f->upage, true, ON_MEMORY);
+
+  lock_release(&page_lock);
+}
+
+void page_load_from_swap(struct page *p) {
+  lock_acquire(&page_lock);
+
+  struct frame *f = frame_get_page(PAL_USER, p->upage);
+  ASSERT(p->position == ON_SWAP);
+  swap_in(f);
+        
+  if (!install_page(p->upage, f->kpage, p->writable))
+    PANIC("install fail!!! why??");
+  
+  p->position = ON_MEMORY;
+
+  lock_release(&page_lock);
+}
 
 
 

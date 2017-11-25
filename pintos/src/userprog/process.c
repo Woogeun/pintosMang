@@ -195,6 +195,7 @@ process_wait (tid_t tid)
 void
 process_exit (void)
 {
+  //printf("<<process_exit>>\n");
   struct thread *curr = thread_current ();
   uint32_t *pd;
 
@@ -210,6 +211,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+      //printf("<<destorying pagedir>>\n");
       curr->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);

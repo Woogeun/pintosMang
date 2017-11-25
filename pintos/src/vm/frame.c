@@ -7,9 +7,9 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
-static void frame_print_table(int);
+//static void frame_print_table(int);
 
-static void frame_print_table(int count) {
+void frame_print_table(int count) {
 	struct list_elem *e;
 	int c = 0;
 	printf("===================== frame list ==================\n");
@@ -29,53 +29,62 @@ void frame_init(void) {
 	lock_init(&frame_lock);
 }
 
-void *frame_get_page(enum palloc_flags flags, void *upage) {
-	//printf("<<frame_get_page>>\n");
+// frame_get_page : alloc new page (not link with kpage and upage). 
 
+struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
+
+	lock_acquire(&frame_lock);
+
+	// try alloc page. NULL if no free page
 	void *kpage = palloc_get_page(flags);
 
 	if (kpage == NULL) {
+
+		// just find frame to be evicted
 		struct frame *evicted = frame_evict_page();
-		if (evicted == NULL)
-			PANIC("no frame to evict");
+		ASSERT(evicted != NULL);
 
-		void *evicted_upage = evicted->upage;
-		//printf("<< kpage before: 0x%8x\n", evicted->kpage);	
-		swap_out(evicted->kpage, evicted_upage); // swap하면 
-		//printf("<< kpage before: 0x%8x, upage : 0x%8x\n", evicted->kpage, evicted_upage);	
+		// write to swap disk
+		swap_out(evicted); 
 
-		pagedir_clear_page(thread_current()->pagedir, evicted_upage);
-		frame_free_page(evicted);
-		
-
-		struct page *p = page_get_by_upage(evicted_upage);
-		if (p == NULL)
-			PANIC("no such page in page table. ");
-		//printf("<< upage evict : 0x%8x, upage fault : 0x%8x\n", p->upage, upage);	
-		//debug_backtrace();
-		//frame_print_table(2);
+		// change page table entry position MEMORY->SWAP
+		struct page *p = page_get_by_upage(evicted->thread, evicted->upage);
+		ASSERT(p != NULL);
 		p->position = ON_SWAP;
-		kpage = palloc_get_page (flags);
 
-		if (kpage == NULL)
-			PANIC("no frame to alloc after evict frame");
+		// remove frame info from kernel
+		pagedir_clear_page(evicted->thread->pagedir, evicted->upage);
+		palloc_free_page(evicted->kpage);
+		list_remove(&evicted->elem);
+		free(evicted);
+
+		// try alloc page again
+		kpage = palloc_get_page (flags);
+		ASSERT(kpage != NULL);
 	}
 
+	// add to frame list 
 	struct frame *f = (struct frame *) malloc (sizeof(struct frame));
+	if (f == -1)
+		PANIC("malloc failure");
+
+	f->thread = thread_current();
 	f->kpage = kpage;
 	f->upage = upage;
+	list_push_back(&frame_list, &f->elem);
 
-	frame_add_list(f);
-	//printf("<<frame_get_page<kpage, upage>: <0x%8x, 0x%8x>>>\n", f->kpage, f->upage);
-	
+	lock_release(&frame_lock);
 
 	return f;
 }
 
-
 void frame_free_page(struct frame *f) {
+	
 	lock_acquire(&frame_lock);
 
+	ASSERT(f->thread != NULL);
+	ASSERT(f->thread->pagedir != NULL);
+	pagedir_clear_page(f->thread->pagedir, f->upage);
 	palloc_free_page(f->kpage);
 	list_remove(&f->elem);
 	free(f);
@@ -86,59 +95,7 @@ void frame_free_page(struct frame *f) {
 struct frame *frame_evict_page(void) {
 
 	struct frame *f = list_entry(list_begin(&frame_list), struct frame, elem);
-
-	if (f == NULL)
-		PANIC("No frame to evict");
 	return f;
-}
-
-void frame_add_list(struct frame *f) {
-
-	lock_acquire(&frame_lock);
-
-	list_push_back(&frame_list, &f->elem);
-
-	lock_release(&frame_lock);
-}
-
-
-struct frame *frame_pop_front_list(void) {
-
-	lock_acquire(&frame_lock);
-
-	struct frame *f = list_entry(list_pop_front(&frame_list), struct frame, elem);
-
-	lock_acquire(&frame_lock);
-
-	return f;
-}
-
-void frame_accessed(void *upage) {
-
-	struct frame *f = frame_get_by_kpage(upage, true);
-	if (f == NULL)
-		PANIC("no such upage in frame list");
-	frame_add_list(f);
-}
-
-struct frame *frame_get_by_kpage(void *kpage, bool is_remove) {
-
-	lock_acquire(&frame_lock);
-	
-	struct list_elem *e;
-	for (e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)) {
-		struct frame *f = list_entry(e, struct frame, elem);
-		if (f->kpage == kpage) {
-			if (is_remove) 
-				list_remove(&f->elem);
-			lock_release(&frame_lock);
-			return f;
-		}
-	}
-
-	lock_release(&frame_lock);
-
-	return NULL;
 }
 
 

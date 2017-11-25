@@ -14,7 +14,7 @@ case $1 in
     break;;
   "3")
     cd vm/build
-    backtrace kernel.o $2
+    backtrace $2
     break;;
   "4")
     cd filesys/build
