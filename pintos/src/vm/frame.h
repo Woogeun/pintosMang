@@ -9,6 +9,7 @@
 
 struct list frame_list;
 struct lock frame_lock;
+//struct list_elem evict_turn;
 
 struct frame {
 	struct thread *thread;

@@ -14,6 +14,13 @@
 
 struct lock page_lock;
 
+struct disk_info {
+	struct file *file;
+	uint32_t page_read_bytes;
+	uint32_t page_zero_bytes;
+	off_t ofs;
+};
+
 enum page_position {
 	ON_DISK,
 	ON_MEMORY,
@@ -24,6 +31,7 @@ struct page {
 	void *upage;
 	bool writable;
 	enum page_position position;
+	struct disk_info d_info;
 	struct hash_elem elem;
 };
 
@@ -31,7 +39,7 @@ struct page {
 
 void page_init(void);
 
-void page_add_hash(void *, bool, enum page_position);
+struct page *page_add_hash(void *, bool, struct file *, uint32_t, uint32_t, off_t);
 void page_remove_hash(void *);
 struct page *page_get_by_upage(struct thread *, void *);
 
@@ -43,6 +51,7 @@ void page_fault_handler(void *, void *, bool, bool, bool);
 
 bool page_grow_stack(void *,void *);
 void page_load_from_swap(struct page *);
+void page_load_from_disk(struct page *);
 
 void page_print_table(void);
 void page_print(struct page *);

@@ -7,8 +7,6 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
-//static void frame_print_table(int);
-
 void frame_print_table(int count) {
 	struct list_elem *e;
 	int c = 0;
@@ -30,7 +28,6 @@ void frame_init(void) {
 }
 
 // frame_get_page : alloc new page (not link with kpage and upage). 
-
 struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 
 	lock_acquire(&frame_lock);
@@ -60,9 +57,10 @@ struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 
 		// try alloc page again
 		kpage = palloc_get_page (flags);
-		ASSERT(kpage != NULL);
 	}
 
+	ASSERT(kpage != NULL);
+	
 	// add to frame list 
 	struct frame *f = (struct frame *) malloc (sizeof(struct frame));
 	if (f == -1)
@@ -93,9 +91,25 @@ void frame_free_page(struct frame *f) {
 }
 
 struct frame *frame_evict_page(void) {
+	struct list_elem *e = list_begin(&frame_list);
+	return list_entry(e, struct frame, elem);
+	// for ( ; ; ) {
+	// 	struct frame *f = list_entry(e, struct frame, elem);
 
-	struct frame *f = list_entry(list_begin(&frame_list), struct frame, elem);
-	return f;
+	// 	if (pagedir_is_accessed(f->thread->pagedir, f->upage)) {
+	// 		pagedir_set_accessed(f->thread->pagedir, f->upage, false);
+	// 		if (pagedir_is_dirty(f->thread->pagedir, f->upage))
+	// 			pagedir_set_dirty(f->thread->pagedir, f->upage, false);
+	// 	}
+	// 	else
+	// 		return f;
+
+	// 	if (e == list_end(&frame_list)) {
+	// 		e = list_begin(&frame_list);
+	// 	}
+	// 	else 
+	// 		e = list_next(e);
+	// }
 }
 
 

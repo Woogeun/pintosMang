@@ -189,33 +189,30 @@ int filesize(int fd) {
 }
 
 int read(int fd, char *buffer, size_t size, void *esp) {
-	lock_acquire(&filesys_lock);
+	//lock_acquire(&filesys_lock);
+	//printf("<<[%d] read 1>>\n", thread_current()->tid);
 	char *tmp = pg_round_down(buffer);
 	while (tmp <= pg_round_down(buffer + size)) {
-		//printf("<< tmp : 0x%8x, buffer + size : 0x%8x>>\n", tmp, buffer + size);
 		if (!valid_address((void *) tmp, esp)){
 			lock_release(&filesys_lock);
 			exit(-1);
 		}
 		tmp += PGSIZE;
 	}
-	lock_release(&filesys_lock);
-	// if (!valid_address((void *) buffer, esp) || !valid_address((void *) buffer + size, esp)){
-	// 	//printf("<<non valid address>>\n");
-	// 	exit(-1);
-	// }
-
+	//lock_release(&filesys_lock);
+	//printf("<<[%d] read 2>>\n", thread_current()->tid);
 	//stdin
 	if (fd == 0) {
-		return input_getc();
+		lock_acquire(&filesys_lock);
+		int size = input_getc();
+		lock_release(&filesys_lock);
+		return size;
 	}
 
 	//stdout
 	if (fd == 1) 
 		exit(-1);
-
-	//page_print_table();
-	//page_print(page_get_by_upage(thread_current(), pg_round_down(buffer)));
+	//printf("<<[%d] read 3>>\n", thread_current()->tid);
 	//ordinary file
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL) 
@@ -224,34 +221,35 @@ int read(int fd, char *buffer, size_t size, void *esp) {
 	lock_acquire(&filesys_lock);
 	size = file_read(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
-
+	//printf("<<[%d] read 4>>\n", thread_current()->tid); 
 	return size;
 }
 
 int write(int fd, const char *buffer, size_t size, void *esp) {
-	lock_acquire(&filesys_lock);
+	//lock_acquire(&filesys_lock);
+	//printf("<<[%d] write 1>>\n", thread_current()->tid);
 	char *tmp = pg_round_down(buffer);
 	while (tmp <= pg_round_down(buffer + size)) {
-		if (!valid_address((void *) tmp, esp)) {
+		if (!valid_address((void *) tmp, esp)){
 			lock_release(&filesys_lock);
 			exit(-1);
 		}
 		tmp += PGSIZE;
 	}
-	lock_release(&filesys_lock);
-	// if (!valid_address((void *) buffer, esp) || !valid_address((void *) buffer + size, esp))
-	// 	exit(-1);
-
+	//lock_release(&filesys_lock);
+	//printf("<<[%d] write 2>>\n", thread_current()->tid);
 	//stdin
 	if (fd == 0)
 		exit(-1);
 
 	//stdout
 	if (fd == 1) {
+		lock_acquire(&filesys_lock);
 		putbuf(buffer, size);
+		lock_release(&filesys_lock);
 		return size;
 	}
-
+	//printf("<<[%d] write 3>>\n", thread_current()->tid);
 	//ordinary file
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL)
@@ -261,6 +259,7 @@ int write(int fd, const char *buffer, size_t size, void *esp) {
 	size = file_write(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
 
+	//printf("<<[%d] write 4>>\n", thread_current()->tid);
 	return size;
 }
 
@@ -364,6 +363,10 @@ bool valid_address(const void *address, void *esp) {
 	}
 	if (p->position == ON_SWAP){
 		page_load_from_swap(p);
+	} else if (p->position == ON_DISK){
+		//printf("[%d] ", thread_current()->tid);
+		//page_print(p);
+		page_load_from_disk(p);
 	}
 	return true;
 }

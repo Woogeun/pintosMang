@@ -82,21 +82,18 @@ void swap_in(struct frame *f) {
 	struct swap *s = swap_get_by_upage(f->thread, upage);
 
 	if (s == NULL)
-		PANIC("[%d] No such user page \"0x%8x\" in swap disk", f->thread->tid, f->upage);
+		PANIC("[%d] No such user page \"0x%8x\" in swap disk", f->thread->tid, (unsigned) f->upage);
 
-	int index, id = s->id;
+	int index;
 
 	for (index = 0; index < 8; index ++) {
-
 		disk_read(d, s->sec_nos[index], kpage);
 		kpage += DISK_SECTOR_SIZE;
 	}
 
-	lock_release(&swap_lock);
-
 	swap_free(s);
 
-	
+	lock_release(&swap_lock);
 }
 
 static int swap_bitmap_scan() {
@@ -144,8 +141,6 @@ static void swap_print_table() {
 
 static struct swap *swap_alloc(int id, void *upage, struct thread *t) {
 
-	//lock_acquire(&swap_lock);
-
 	struct list_elem *e;
 	for (e = list_begin(&swap_list); e != list_end(&swap_list); e = list_next(e)) {
 		struct swap *s = list_entry(e, struct swap, elem);
@@ -160,21 +155,15 @@ static struct swap *swap_alloc(int id, void *upage, struct thread *t) {
 
 	list_push_back(&swap_list, &s->elem);
 
-	//lock_release(&swap_lock);
-
 	return s;
 }
 
 void swap_free(struct swap *s) {
-	
-	lock_acquire(&swap_lock);
 
 	swap_bitmap.used_map[s->id] = 0;
 	swap_bitmap.count--;
 	list_remove(&s->elem);
 	free(s);
-
-	lock_release(&swap_lock);
 }
 
 
