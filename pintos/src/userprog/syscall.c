@@ -27,6 +27,7 @@ void
 syscall_init (void) 
 {
 	lock_init(&filesys_lock);
+	lock_init(&free_lock);
   	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -38,22 +39,22 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   switch(*(int *) f->esp) {
-  	case SYS_HALT:		halt(); 									break;
-  	case SYS_EXIT:		exit(arg1); 								break;
-  	case SYS_EXEC:		f->eax = exec((char *) arg1);				break;
-  	case SYS_WAIT:		f->eax = wait((tid_t) arg1); 				break;
-  	case SYS_CREATE:	f->eax = create((char *) arg1, arg2); 		break;
-  	case SYS_REMOVE:	f->eax = remove((char *) arg1); 			break;
-  	case SYS_OPEN:		f->eax = open((char *) arg1); 				break;
-  	case SYS_FILESIZE:	f->eax = filesize(arg1); 					break;
-  	case SYS_READ:		f->eax = read(arg1, (char *) arg2, arg3); 	break;
-  	case SYS_WRITE:		f->eax = write(arg1, (char *) arg2, arg3); 	break;
-  	case SYS_SEEK:		seek(arg1, arg2); 							break;
-  	case SYS_TELL:		f->eax = tell(arg1); 						break;
-  	case SYS_CLOSE:		close(arg1); 								break;
-  	case SYS_MMAP:		f->eax = mmap(arg1, (void *) arg2);			break;
-  	case SYS_MUNMAP:	munmap(arg1);								break;
-  	default:														break;
+  	case SYS_HALT:		halt(); 											break;
+  	case SYS_EXIT:		exit(arg1); 										break;
+  	case SYS_EXEC:		f->eax = exec((char *) arg1, f->esp);				break;
+  	case SYS_WAIT:		f->eax = wait((tid_t) arg1); 						break;
+  	case SYS_CREATE:	f->eax = create((char *) arg1, arg2, f->esp); 		break;
+  	case SYS_REMOVE:	f->eax = remove((char *) arg1, f->esp); 			break;
+  	case SYS_OPEN:		f->eax = open((char *) arg1, f->esp); 				break;
+  	case SYS_FILESIZE:	f->eax = filesize(arg1); 							break;
+  	case SYS_READ:		f->eax = read(arg1, (char *) arg2, arg3, f->esp); 	break;
+  	case SYS_WRITE:		f->eax = write(arg1, (char *) arg2, arg3, f->esp); 	break;
+  	case SYS_SEEK:		seek(arg1, arg2); 									break;
+  	case SYS_TELL:		f->eax = tell(arg1); 								break;
+  	case SYS_CLOSE:		close(arg1); 										break;
+  	case SYS_MMAP:		f->eax = mmap(arg1, (void *) arg2);					break;
+  	case SYS_MUNMAP:	munmap(arg1);										break;
+  	default:																break;
   	
 
   }
@@ -96,10 +97,10 @@ void exit(int status) {
 	thread_exit();
 }
 
-tid_t exec(const char *cmd_line) {
+tid_t exec(const char *cmd_line, void *esp) {
 	//printf("<<exec>>\n");
 
-	if (!valid_address((void *) cmd_line))
+	if (!valid_address((void *) cmd_line, esp))
 		exit(-1);
 
 	tid_t tid = process_execute(cmd_line);
@@ -112,9 +113,9 @@ int wait(tid_t tid) {
 	return status;
 }
 
-bool create(const char *file, unsigned size) {
+bool create(const char *file, unsigned size, void *esp) {
 	//printf("<<create>>\n");
-	if (!valid_address((void *) file))
+	if (!valid_address((void *) file, esp))
 		exit(-1);
 
 	if (strlen(file) == 0) 
@@ -133,8 +134,8 @@ bool create(const char *file, unsigned size) {
 	return success;
 }
 
-bool remove(const char *file) {
-	if (!valid_address((void *) file))
+bool remove(const char *file, void *esp) {
+	if (!valid_address((void *) file, esp))
 		exit(-1);
 
 	bool success;
@@ -146,9 +147,9 @@ bool remove(const char *file) {
 	return success;
 }
 
-int open(const char *file_name) {
+int open(const char *file_name, void *esp) {
 	//printf("<<open>>\n");
-	if (!valid_address((void *) file_name))
+	if (!valid_address((void *) file_name, esp))
 		exit(-1);
 
 	struct thread *curr = thread_current();
@@ -187,11 +188,22 @@ int filesize(int fd) {
 	return size;
 }
 
-int read(int fd, char *buffer, size_t size) {
-	if (!valid_address((void *) buffer)){
-		//printf("<<non valid address>>\n");
-		exit(-1);
+int read(int fd, char *buffer, size_t size, void *esp) {
+	lock_acquire(&filesys_lock);
+	char *tmp = pg_round_down(buffer);
+	while (tmp <= pg_round_down(buffer + size)) {
+		//printf("<< tmp : 0x%8x, buffer + size : 0x%8x>>\n", tmp, buffer + size);
+		if (!valid_address((void *) tmp, esp)){
+			lock_release(&filesys_lock);
+			exit(-1);
+		}
+		tmp += PGSIZE;
 	}
+	lock_release(&filesys_lock);
+	// if (!valid_address((void *) buffer, esp) || !valid_address((void *) buffer + size, esp)){
+	// 	//printf("<<non valid address>>\n");
+	// 	exit(-1);
+	// }
 
 	//stdin
 	if (fd == 0) {
@@ -202,7 +214,8 @@ int read(int fd, char *buffer, size_t size) {
 	if (fd == 1) 
 		exit(-1);
 
-	
+	//page_print_table();
+	//page_print(page_get_by_upage(thread_current(), pg_round_down(buffer)));
 	//ordinary file
 	struct file_info *f_info = find_file_info_by_fd(fd);
 	if (f_info == NULL) 
@@ -215,10 +228,19 @@ int read(int fd, char *buffer, size_t size) {
 	return size;
 }
 
-int write(int fd, const char *buffer, size_t size) {
-	//printf("<< wwrite >>\n");
-	if (!valid_address((void *) buffer))
-		exit(-1);
+int write(int fd, const char *buffer, size_t size, void *esp) {
+	lock_acquire(&filesys_lock);
+	char *tmp = pg_round_down(buffer);
+	while (tmp <= pg_round_down(buffer + size)) {
+		if (!valid_address((void *) tmp, esp)) {
+			lock_release(&filesys_lock);
+			exit(-1);
+		}
+		tmp += PGSIZE;
+	}
+	lock_release(&filesys_lock);
+	// if (!valid_address((void *) buffer, esp) || !valid_address((void *) buffer + size, esp))
+	// 	exit(-1);
 
 	//stdin
 	if (fd == 0)
@@ -321,7 +343,7 @@ void munmap(int mapid_t UNUSED) {
 
 int return_args(struct intr_frame *f, int order) {
 	int *address = (int *) ((int *)f->esp) + order;
-	if (!valid_address(address)){
+	if (!valid_address(address, f->esp)){
 		exit(-1);
 	}
 	int arg = *address;
@@ -332,21 +354,15 @@ int return_args(struct intr_frame *f, int order) {
 
 //about validation
 
-bool valid_address(const void *address) {
-	uint32_t *pd = active_pd();
-
+bool valid_address(const void *address, void *esp) {
 	if (!is_user_vaddr(address) || address <= UPAGE_BOTTOM) 
 		return false;
 
 	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
 	if (p == NULL){
-		//page_grow_stack(address);
-		//page_print_table();
-		return false;
+		return page_grow_stack(esp, address);
 	}
 	if (p->position == ON_SWAP){
-		page_print_table();
-		//printf("good swap to memory in read \n");
 		page_load_from_swap(p);
 	}
 	return true;
@@ -463,6 +479,8 @@ bool cmp_fd(const struct list_elem *a, const struct list_elem *b, void *aux) {
 }
 
 void free_file_list() {
+	lock_acquire(&free_lock);
+
 	struct thread *curr = thread_current();
 	struct list *file_list = &curr->file_list;
 	
@@ -477,6 +495,8 @@ void free_file_list() {
 		list_remove(&f_info->elem);
 		free(f_info);
 	}
+
+	lock_release(&free_lock);
 }
 
 
@@ -507,6 +527,8 @@ struct child_info *find_child_info_by_tid(struct thread *t, tid_t tid) {
 }
 
 void free_child_list() {
+	lock_acquire(&free_lock);
+
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
 
@@ -517,9 +539,13 @@ void free_child_list() {
 		list_remove(&c_info->elem);
 		free(c_info);
 	}
+
+	lock_release(&free_lock);
 }
 
 void free_page() {
+	lock_acquire(&page_lock);
+
 	struct list_elem *e = list_begin(&frame_list);
 	while (e != list_tail(&frame_list)) {
 		struct frame *f = list_entry(e, struct frame, elem);
@@ -539,6 +565,8 @@ void free_page() {
 		if (s->tid == curr_tid)
 			swap_free(s);
 	}
+
+	lock_release(&page_lock);
 }
 
 

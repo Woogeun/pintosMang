@@ -12,14 +12,14 @@ void syscall_init (void);
 //syscall helper function
 void        halt(void);						
 void        exit(int);						
-tid_t       exec(const char *);				
+tid_t       exec(const char *, void *);				
 int         wait(tid_t);					
-bool        create(const char *, size_t);		
-bool        remove(const char *);				
-int         open(const char *);					
+bool        create(const char *, size_t, void *);		
+bool        remove(const char *, void *);				
+int         open(const char *, void *);					
 int         filesize(int);						
-int         read(int, char *, size_t);			
-int         write(int, const char *, size_t);	
+int         read(int, char *, size_t, void *);			
+int         write(int, const char *, size_t, void *);	
 void        seek(int, unsigned);				
 unsigned    tell(int);						
 void        close(int);		
@@ -29,12 +29,13 @@ void 		munmap(int);
 
 //shared data
 struct lock filesys_lock;
+struct lock free_lock;
 
 //My Implementation
 int return_args(struct intr_frame *, int);
 
 //about validation
-bool valid_address(const void *);
+bool valid_address(const void *, void *);
 bool is_child(struct thread *, tid_t);
 
 //about wait_info structure

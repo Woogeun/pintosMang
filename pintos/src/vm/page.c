@@ -36,11 +36,15 @@ void page_print_table(void) {
           next = list_next(elem);
           struct hash_elem *he = list_entry(elem, struct hash_elem, list_elem);
           struct page *p = hash_entry(he, struct page, elem);
-          printf("upage: 0x%8x, position: %6s, writable: %s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap", p->writable ? "writable" : "non-writable");
+          page_print(p);
         }
     }
     printf("==========================================\n");   
     intr_set_level(old_level); 
+}
+
+void page_print(struct page *p) {
+  printf("upage: 0x%8x, position: %6s, writable: %s\n", p->upage, p->position == ON_DISK ? "disk" : p->position == ON_MEMORY ? "memory" : "swap", p->writable ? "writable" : "non-writable");
 }
 
 void page_init(void) {
@@ -226,12 +230,13 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user, bool
     //printf("<< present invalid access 0x%8x >>\n", p->upage);  
     exit(-1);
   }
-  if (!user){
-    //printf("<< !user invalid access 0x%8x >>\n", p->upage);
-    exit(-1);
-  }
+  // if (!user){
+  //   printf("<< !user invalid access 0x%8x >>\n", p->upage);
+  //   exit(-1);
+  // }
 
   // page fault handler
+
 
   if (p != NULL) {
     if (p->position == ON_MEMORY){
@@ -244,31 +249,38 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user, bool
       page_load_from_swap(p);
     }
 
-  } else if (is_stack_growth(esp, fault_addr)) {              // stack_growth : 
-    page_grow_stack(fault_addr);
-  } else {                                                    // bad stack grow                
-    //printf("<< invalid stack growth >>\n");
-    //printf(" esp: 0x%8x\naddr: 0x%8x\n", esp, fault_addr);
-    exit(-1);
+  } 
+  else if (!page_grow_stack(esp, fault_addr)){
+      exit(-1);
   }
 }
 
 static bool is_stack_growth(void *esp, void *fault_addr) {
-  bool compare = fault_addr - esp + 32 >= 0;                  // check valid address difference
-  bool result = compare && fault_addr >= UPAGE_BOTTOM;        // check address is user address
+  int diff = fault_addr - esp;
+  bool upper_bound = diff < STACK_MAX_SIZE;                                     // check max stack size
+  bool under_bound = diff + 32 >= 0;                                            // check valid address difference
+  bool result = upper_bound && under_bound && fault_addr >= UPAGE_BOTTOM;       // check address is user address
+  //printf("<< fault_addr : 0x%8x, esp : 0x%8x, diff : %d -> %s >>\n", 
+  //  fault_addr, esp, fault_addr - esp, result ? "grow!" : "not grow!");
   return result;
 }
 
-void page_grow_stack(void *fault_addr) {
-  lock_acquire(&page_lock);
+bool page_grow_stack(void *esp, void *fault_addr) {
+  if (is_stack_growth(esp, fault_addr)) {
+    lock_acquire(&page_lock);
 
-  struct frame *f = frame_get_page(PAL_USER | PAL_ZERO, pg_round_down(fault_addr));
-  if (!install_page(f->upage, f->kpage, true)) {
-    PANIC("stack growth failure");
+    struct frame *f = frame_get_page(PAL_USER, pg_round_down(fault_addr));
+    if (!install_page(f->upage, f->kpage, true)) {
+      PANIC("stack growth failure");
+    }
+    page_add_hash(f->upage, true, ON_MEMORY);
+    //page_print_table();
+
+    lock_release(&page_lock);
+    return true;
+  } else {
+    return false;
   }
-  page_add_hash(f->upage, true, ON_MEMORY);
-
-  lock_release(&page_lock);
 }
 
 void page_load_from_swap(struct page *p) {

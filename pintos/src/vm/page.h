@@ -10,6 +10,7 @@
 
 #define STACK_INITIAL_UPAGE PHYS_BASE - PGSIZE
 #define UPAGE_BOTTOM 0x08048000
+#define STACK_MAX_SIZE 8000000
 
 struct lock page_lock;
 
@@ -40,10 +41,11 @@ bool page_setup_stack(void **, int, char **);
 bool install_page(void *, void *, bool);
 void page_fault_handler(void *, void *, bool, bool, bool);
 
-void page_grow_stack(void *);
+bool page_grow_stack(void *,void *);
 void page_load_from_swap(struct page *);
 
 void page_print_table(void);
+void page_print(struct page *);
 
 
 #endif
