@@ -149,6 +149,8 @@ bool remove(const char *file, void *esp) {
 
 int open(const char *file_name, void *esp) {
 	//printf("<<open>>\n");
+	lock_acquire(&filesys_lock);
+
 	if (!valid_address((void *) file_name, esp))
 		exit(-1);
 
@@ -156,12 +158,17 @@ int open(const char *file_name, void *esp) {
 	int fd = -1;
 	struct file *file;
 
+	lock_release(&filesys_lock);
+
 	lock_acquire(&filesys_lock);
 	file = filesys_open(file_name);
-	lock_release(&filesys_lock);
+	//lock_release(&filesys_lock);
 	
-	if (file == NULL)
+	if (file == NULL){
+		//printf("<<file none>>\n");
+		lock_release(&filesys_lock);
 		return -1;
+	}
 
 	struct file_info *f_info = create_file_info();
 	fd = get_fd(&curr->file_list);
@@ -171,6 +178,8 @@ int open(const char *file_name, void *esp) {
 	f_info->position = 0;
 	
 	list_insert_ordered(&curr->file_list, &f_info->elem, &cmp_fd, NULL);
+
+	lock_release(&filesys_lock);
 	
 	return fd;
 }
@@ -189,7 +198,7 @@ int filesize(int fd) {
 }
 
 int read(int fd, char *buffer, size_t size, void *esp) {
-	//lock_acquire(&filesys_lock);
+	lock_acquire(&filesys_lock);
 	//printf("<<[%d] read 1>>\n", thread_current()->tid);
 	char *tmp = pg_round_down(buffer);
 	while (tmp <= pg_round_down(buffer + size)) {
@@ -199,7 +208,7 @@ int read(int fd, char *buffer, size_t size, void *esp) {
 		}
 		tmp += PGSIZE;
 	}
-	//lock_release(&filesys_lock);
+	lock_release(&filesys_lock);
 	//printf("<<[%d] read 2>>\n", thread_current()->tid);
 	//stdin
 	if (fd == 0) {
@@ -226,7 +235,7 @@ int read(int fd, char *buffer, size_t size, void *esp) {
 }
 
 int write(int fd, const char *buffer, size_t size, void *esp) {
-	//lock_acquire(&filesys_lock);
+	lock_acquire(&filesys_lock);
 	//printf("<<[%d] write 1>>\n", thread_current()->tid);
 	char *tmp = pg_round_down(buffer);
 	while (tmp <= pg_round_down(buffer + size)) {
@@ -236,7 +245,7 @@ int write(int fd, const char *buffer, size_t size, void *esp) {
 		}
 		tmp += PGSIZE;
 	}
-	//lock_release(&filesys_lock);
+	lock_release(&filesys_lock);
 	//printf("<<[%d] write 2>>\n", thread_current()->tid);
 	//stdin
 	if (fd == 0)
@@ -354,20 +363,29 @@ int return_args(struct intr_frame *f, int order) {
 //about validation
 
 bool valid_address(const void *address, void *esp) {
-	if (!is_user_vaddr(address) || address <= UPAGE_BOTTOM) 
+	if (!is_user_vaddr(address) || address <= UPAGE_BOTTOM) {
+		//printf("<<address first failure>>\n");
 		return false;
+	}
 
 	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
 	if (p == NULL){
+		//printf("<<address check stack grow>>\n");
 		return page_grow_stack(esp, address);
 	}
+
 	if (p->position == ON_SWAP){
+		//printf("<<address check swap>>\n");
 		page_load_from_swap(p);
 	} else if (p->position == ON_DISK){
 		//printf("[%d] ", thread_current()->tid);
 		//page_print(p);
+		//printf("<<address check disk\n");
 		page_load_from_disk(p);
+	} else if (p->position == ON_MEMORY){
+		//printf("<<on memory>>\n");
 	}
+
 	return true;
 }
 
