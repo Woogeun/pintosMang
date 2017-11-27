@@ -296,6 +296,19 @@ void page_load_from_disk(struct page *p) {
 
 void page_to_swap(struct page *p) {
   page_load_from_disk(p);
+
+  struct frame *f = frame_get_by_upage(p->upage);
+  ASSERT(f != NULL);
+
+  lock_acquire(&frame_lock);
+  swap_out(f);
+  p->position = ON_SWAP;
+  pagedir_clear_page(f->thread->pagedir, f->upage);
+  palloc_free_page(f->kpage);
+  list_remove(&f->elem);
+  free(f);
+
+  lock_release(&frame_lock);
 }
 
 void page_to_disk(struct page *p) {
