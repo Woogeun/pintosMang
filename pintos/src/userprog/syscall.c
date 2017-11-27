@@ -77,7 +77,8 @@ void exit(int status) {
 	if (filesys_lock.holder == curr)
 		lock_release(&filesys_lock);
 
-	free_child_list();
+  	free_mmap_list();
+  	free_child_list();
   	free_file_list();
   	free_page();
 
@@ -113,7 +114,6 @@ tid_t exec(const char *cmd_line, void *esp) {
 }
 
 int wait(tid_t tid) {
-	//printf("<<wait>>\n");
 	int status = process_wait(tid);
 	return status;
 }
@@ -338,8 +338,8 @@ void close(int fd) {
 
 int mmap(int fd, void *addr, void *esp UNUSED) {
 	// find open file with fd
-	struct file_info *f = find_file_info_by_fd(fd);
-	if (f == NULL) 
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) 
 		exit(-1);
 
 	unsigned size = filesize(fd);
@@ -349,7 +349,6 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 
 	if (pg_ofs(addr) != 0) {
 		lock_release(&validation_lock);
-		//printf("<<addr are not aligned>>\n");
 		return -1;
 	}
 
@@ -357,7 +356,6 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	while ((unsigned) tmp <= (unsigned) pg_round_down(addr + size)) {
 		if (!valid_mmap_address(tmp)) {
 			lock_release(&validation_lock);
-			//printf("<<invalid address>>\n");
 			return -1;
 		}
 		tmp += PGSIZE;
@@ -368,7 +366,10 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	// find file size and find page_read_bytes and page_zero_bytes
 	uint32_t read_bytes, zero_bytes;
 	read_bytes = size;
-	zero_bytes = (unsigned) pg_round_up(size) - size;
+	zero_bytes = (unsigned) pg_round_up((void *) size) - size;
+
+	if (size == 0)
+		return -1;
 
 	ASSERT(pg_ofs((void *) (read_bytes + zero_bytes)) == 0);
 
@@ -379,6 +380,7 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	void *upage = addr;
 	seek(fd, 0);
 	off_t ofs = 0;
+
 	while (read_bytes > 0 || zero_bytes > 0) {
 	    lock_acquire(&mmap_lock);
 
@@ -386,8 +388,14 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	  	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 	  	//swap out directly from disk to swap
-	    struct page *p = page_add_hash(upage, true, f->file, page_read_bytes, page_zero_bytes, ofs, mapid);
+	    struct page *p = page_add_hash(upage, true, f_info->file, page_read_bytes, page_zero_bytes, ofs);
 	    page_to_swap(p);
+
+	    //add to mmap list
+	    struct mmap_info *m_info = create_mmap_info();
+		m_info->mapid = mapid;
+		m_info->page = p;
+		list_insert_ordered(&thread_current()->mmap_list, &m_info->elem, &cmp_mapid, NULL);	
 
 	    /* Advanced */
 	  	read_bytes -= page_read_bytes;
@@ -398,35 +406,29 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	    lock_release(&mmap_lock);
   	}
 
-	// add to threads mmap_list
-	struct mmap_info *m_info = create_mmap_info();
-	m_info->mapid = mapid;
-	list_insert_ordered(&thread_current()->mmap_list, &m_info->elem, &cmp_mapid, NULL);
-
-	//
-
-	//
-
-	//
-
 	return mapid;
 }
 
-void munmap(int mapid UNUSED) {
-	// find all such mapid in mmap_list
+void munmap(int mapid) {
+	lock_acquire(&mmap_lock);
 
-	// flush into disk only written page
+	//check mmap_list is not empty
+	struct list *mmap_list = &thread_current()->mmap_list;
+	if (list_empty(mmap_list))
+		return;
 
-	// free according pages from page table
+	//unman all the mmap pages and remove from the mmap list
+	struct list_elem *e = list_begin(mmap_list);
+	while (e != list_tail(mmap_list)) {
+		struct mmap_info *m_info = list_entry(e, struct mmap_info, elem);
+		e = list_next(e);
+		if (m_info->mapid == mapid) {
+			page_to_disk(m_info->page);
+			list_remove(list_prev(e));
+		}
+	}
 
-	// remove mapid from mmap_list
-
-	//
-
-	//
-
-	//
-
+	lock_release(&mmap_lock);
 }
 
 
@@ -468,49 +470,37 @@ int return_args(struct intr_frame *f, int order) {
 
 bool valid_address(void *address, void *esp) {
 	if (!is_user_vaddr(address) || (unsigned) address <= UPAGE_BOTTOM) {
-		//printf("<<address first failure>>\n");
 		return false;
 	}
 
 	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
 	if (p == NULL){
-		//printf("<<address check stack grow>>\n");
 		return page_grow_stack(esp, address);
 	}
 
 	if (p->position == ON_SWAP){
-		//printf("<<address check swap>>\n");
 		page_load_from_swap(p);
 	} else if (p->position == ON_DISK){
-		//printf("[%d] ", thread_current()->tid);
-		//page_print(p);
-		//printf("<<address check disk\n");
 		page_load_from_disk(p);
-	} else if (p->position == ON_MEMORY){
-		//printf("<<on memory>>\n");
 	}
 
 	return true;
 }
 
 bool is_child(struct thread *t, tid_t tid) {
-	//printf("<<4>>\n");
   struct child_info *c_info = find_child_info_by_tid(t, tid);
-  //printf("<<5>>\n");
   if (c_info == NULL) return false;
   return true;
 }
 
 bool valid_mmap_address(void *address) {
 	if (!is_user_vaddr(address) || (unsigned) address <= UPAGE_BOTTOM) {
-		//printf("<<address first failure>>\n");
 		return false;
 	}
 
 	ASSERT(pg_ofs(address) == 0);
 	struct page *p = page_get_by_upage(thread_current(), address);
 	if (p != NULL) {
-		//printf("<<already such page in table>>\n");
 		return false;
 	}
 
@@ -700,7 +690,6 @@ void free_page() {
 		e = list_next(e);
 		struct thread *curr = thread_current();
 		if (curr == f->thread){
-			//printf("<<match>>\n");
 			frame_free_page(f);
 		}
 	}
@@ -751,9 +740,27 @@ bool cmp_mapid(const struct list_elem *a, const struct list_elem *b, void *aux) 
 	return true;
 }
 
+void free_mmap_list() {
+	lock_acquire(&mmap_lock);
 
+	struct list *mmap_list = &thread_current()->mmap_list;
+	while (!list_empty(mmap_list)) {
+		struct mmap_info *m_info = list_entry(list_pop_front(mmap_list), struct mmap_info, elem);
+		page_to_disk(m_info->page);
+	}
 
+	lock_release(&mmap_lock);
+}
 
+void print_mmap_list(struct list *list) {
+	struct list_elem *e;
+	printf("=====================[%d] mmap_list==============\n", thread_current()->tid);
+	for (e = list_begin(list); e != list_end(list); e = list_next(e)) {
+		struct mmap_info *m_info = list_entry(e, struct mmap_info, elem);
+		printf("mapid : %d\n", m_info->mapid);
+	}
+	printf("==================================================\n");
+}
 
 
 

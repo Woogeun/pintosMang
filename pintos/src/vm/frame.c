@@ -17,7 +17,7 @@ void frame_print_table(int count) {
 		if (c ++ >= count)
 			break;
 		struct frame *f = list_entry(e, struct frame, elem);	
-		printf("upage : 0x%8x, kpage : 0x%8x\n", f->upage, f->kpage);
+		printf("upage : 0x%8x, kpage : 0x%8x\n", (unsigned) f->upage, (unsigned) f->kpage);
 
 	}
 	printf("====================================================\n");
@@ -110,6 +110,7 @@ struct frame *frame_get_by_upage(void *upage) {
 				return f;
 			}
 	}
+	
 	lock_release(&frame_lock);
 	return NULL;
 }

@@ -52,7 +52,7 @@ void page_init(void) {
 	lock_init(&page_lock);
 }
 
-struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32_t page_read_bytes, uint32_t page_zero_bytes, off_t ofs, int mapid) {
+struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32_t page_read_bytes, uint32_t page_zero_bytes, off_t ofs) {
 
 	struct page *p = (struct page *) malloc (sizeof(struct page));
 	p->upage = upage;
@@ -64,19 +64,15 @@ struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32
   d_info->page_read_bytes = page_read_bytes;
   d_info->page_zero_bytes = page_zero_bytes;
   d_info->ofs = ofs;
-  d_info->mapid = mapid;
 
 	hash_insert(&thread_current()->page_hash, &p->elem);
 
   return p;
 }
 
-void page_remove_hash(void *upage) {
+void page_remove_hash(struct page *p) {
   lock_acquire(&page_lock);
 
-	struct page *p = page_get_by_upage(thread_current(), upage);
-	if (p == NULL)
-		PANIC("no such page in current thread");
 	hash_delete(&thread_current()->page_hash, &p->elem);
 	free(p);
 
@@ -111,7 +107,7 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
   	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
   	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-    page_add_hash(upage, writable, file, page_read_bytes, page_zero_bytes, ofs, -1);
+    page_add_hash(upage, writable, file, page_read_bytes, page_zero_bytes, ofs);
 
   	read_bytes -= page_read_bytes;
   	zero_bytes -= page_zero_bytes;
@@ -127,10 +123,6 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
 bool page_setup_stack (void **esp, int argc, char **argv) 
 {
   lock_acquire(&page_lock);
-
-  //page_add_hash(STACK_INITIAL_UPAGE, true, NULL, 0, 0, 0);
-
-  //lock_release(&page_lock);
 
   if (!page_grow_stack(STACK_INITIAL_UPAGE, STACK_INITIAL_UPAGE)) {
     printf("<< page grow stack fail in lazy loading >>\n");
@@ -206,10 +198,8 @@ void page_fault_handler(void *esp, void *fault_addr, bool write, bool user UNUSE
   // invalid access detection
   if (!not_present){
     if (!p->writable && write) {
-      //printf("You tried to write to non-writable page\n");
       exit(-1);
-    }
-    //printf("<< present invalid access 0x%8x >>\n", p->upage);  
+    } 
     exit(-1);
   }
 
@@ -250,7 +240,7 @@ bool page_grow_stack(void *esp, void *fault_addr) {
     if (!install_page(f->upage, f->kpage, true)) {
       PANIC("stack growth failure");
     }
-    struct page *p = page_add_hash(f->upage, true, NULL, 0, 0, 0, -1);
+    struct page *p = page_add_hash(f->upage, true, NULL, 0, 0, 0);
     p->position = ON_MEMORY;
 
     success = true;
@@ -287,7 +277,7 @@ void page_load_from_disk(struct page *p) {
   struct disk_info *d_info = &p->d_info;
 
   ASSERT(d_info->file != NULL);
-  //printf("<<[%d] fild read at : page_read_bytes %d, page_zero_bytes %d, ofs %d>>\n", thread_current()->tid, d_info->page_read_bytes, d_info->page_zero_bytes, d_info->ofs);
+  
   if (file_read_at (d_info->file, f->kpage, d_info->page_read_bytes, d_info->ofs) != (int) d_info->page_read_bytes) {
     frame_free_page(f);
     PANIC("file read didn`t read all the bytes");
@@ -306,10 +296,36 @@ void page_load_from_disk(struct page *p) {
 
 void page_to_swap(struct page *p) {
   page_load_from_disk(p);
-  //struct frame *f = frame_get_by_upage(p->upage);
 }
 
+void page_to_disk(struct page *p) {
+  lock_acquire(&page_lock);
 
+  struct disk_info *d_info = &p->d_info;
+  struct file *file = d_info->file;
+  size_t size = d_info->page_read_bytes;
+  off_t ofs = d_info->ofs;
+
+  if (p->position == ON_SWAP) {
+    lock_release(&page_lock);
+    page_load_from_swap(p);
+    lock_acquire(&page_lock);
+  }
+
+  ASSERT(p->position == ON_MEMORY);
+  struct frame *f = frame_get_by_upage(p->upage);
+  ASSERT(f != NULL);
+
+  lock_acquire(&filesys_lock);
+  if (pagedir_is_dirty(thread_current()->pagedir, p->upage))
+    file_write_at(file, f->kpage, size, ofs);
+  lock_release(&filesys_lock);
+
+  lock_release(&page_lock);
+
+  frame_free_page(f);
+  page_remove_hash(p);
+}
 
 
 

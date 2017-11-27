@@ -67,8 +67,6 @@ void swap_out(struct frame *f) {
 	swap_bitmap.count ++;
 
 	lock_release(&swap_lock);
-
-	//swap_print_table();
 }
 
 void swap_in(struct frame *f) {
@@ -78,7 +76,6 @@ void swap_in(struct frame *f) {
 	void *kpage = f->kpage;
 	void *upage = f->upage;
 
-	//swap_print_table();
 	struct swap *s = swap_get_by_upage(f->thread, upage);
 
 	if (s == NULL)
@@ -116,12 +113,9 @@ struct swap *swap_get_by_upage(struct thread *t, void *upage) {
 		struct swap *s = list_entry(e, struct swap, elem);
 		if (s->tid == curr_tid)
 			if (s->upage == upage) {
-				//lock_release(&swap_lock);
 				return s;
 			}
 	}
-
-	//lock_release(&swap_lock);
 
 	return NULL;
 }

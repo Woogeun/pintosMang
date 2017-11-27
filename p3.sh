@@ -46,7 +46,7 @@ case $1 in
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-clean -a mmap-clean -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-clean
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-inherit -a mmap-inherit -p ../../tests/vm/sample.txt -a sample.txt -p tests/vm/child-inherit -a child-inherit --swap-disk=4 -- -q   -f run mmap-inherit
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-misalign -a mmap-misalign -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-misalign
-    pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-null -a mmap-null -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-nul
+    pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-null -a mmap-null -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-null
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-over-code -a mmap-over-code -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-over-code
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-over-data -a mmap-over-data -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-over-data
     pintos -v -k -T 60 --bochs  --fs-disk=2 -p tests/vm/mmap-over-stk -a mmap-over-stk -p ../../tests/vm/sample.txt -a sample.txt --swap-disk=4 -- -q   -f run mmap-over-stk

@@ -66,5 +66,6 @@ void free_page(void);
 struct mmap_info *create_mmap_info(void);
 int get_mapid(void);
 bool cmp_mapid(const struct list_elem *, const struct list_elem *, void *);
+void free_mmap_list(void);
 
 #endif /* userprog/syscall.h */

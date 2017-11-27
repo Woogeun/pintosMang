@@ -9,8 +9,8 @@
 
 struct list frame_list;
 struct lock frame_lock;
-//struct list_elem evict_turn;
 
+//new structure in frame.c
 struct frame {
 	struct thread *thread;
 	void *upage;
@@ -18,7 +18,10 @@ struct frame {
 	struct list_elem elem;
 };
 
+//init function
 void frame_init(void);
+
+//improved palloc function to interact with page.c
 struct frame *frame_get_page(enum palloc_flags, void *);
 void frame_free_page(struct frame *);
 struct frame *frame_evict_page(void);
