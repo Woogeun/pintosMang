@@ -29,7 +29,6 @@ void 		munmap(int);
 //shared data
 struct lock filesys_lock;
 struct lock free_lock;
-struct lock validation_lock;
 struct lock mmap_lock;
 
 //My Implementation

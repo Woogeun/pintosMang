@@ -15,6 +15,7 @@ struct frame {
 	struct thread *thread;
 	void *upage;
 	void *kpage;
+	bool chance;
 	struct list_elem elem;
 };
 
@@ -27,6 +28,7 @@ void frame_free_page(struct frame *);
 struct frame *frame_evict_page(void);
 struct frame *frame_get_by_upage(void *);
 
-void frame_print_table(int);
+void frame_print(struct frame *);
+void frame_print_table(void);
 
 #endif

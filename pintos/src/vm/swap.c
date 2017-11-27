@@ -12,7 +12,7 @@ struct bitmap swap_bitmap;
 struct disk *d;
 
 static void swap_print_table(void);
-static int swap_bitmap_scan(void);
+static int swap_bitmap_scan_and_flip(void);
 static struct swap *swap_alloc(int, void *, struct thread *);
 
 void swap_init(void) {
@@ -32,8 +32,6 @@ void swap_init(void) {
 
 void swap_out(struct frame *f) {
 
-	lock_acquire(&swap_lock);
-
 	void *kpage = f->kpage;
 	void *upage = f->upage;
 
@@ -41,7 +39,9 @@ void swap_out(struct frame *f) {
 	disk_sector_t sec_no;
 
 	
-	int id = swap_bitmap_scan();
+	lock_acquire(&swap_lock);
+
+	int id = swap_bitmap_scan_and_flip();
 	int count = 0;
 	
 	if (id == -1)
@@ -61,20 +61,15 @@ void swap_out(struct frame *f) {
 	}
 	ASSERT(count == 8);
 
-	
-
-	swap_bitmap.used_map[id] = 1;
-	swap_bitmap.count ++;
-
 	lock_release(&swap_lock);
 }
 
 void swap_in(struct frame *f) {
 
-	lock_acquire(&swap_lock);
-
 	void *kpage = f->kpage;
 	void *upage = f->upage;
+
+	lock_acquire(&swap_lock);
 
 	struct swap *s = swap_get_by_upage(f->thread, upage);
 
@@ -93,20 +88,21 @@ void swap_in(struct frame *f) {
 	lock_release(&swap_lock);
 }
 
-static int swap_bitmap_scan() {
+static int swap_bitmap_scan_and_flip() {
 	int *map = swap_bitmap.used_map;
 	int i, max = swap_bitmap.max;
 	for (i = 0; i < max; i++)
-		if (map[i] == 0)
+		if (map[i] == 0) {
+			map[i] = 1;
+			swap_bitmap.count++;
 			return i;
+		}
 	return -1;
 }
 
 
 struct swap *swap_get_by_upage(struct thread *t, void *upage) {
 
-	//lock_acquire(&swap_lock);
-	
 	tid_t curr_tid = t->tid;
 	struct list_elem *e;
 	for (e = list_begin(&swap_list); e != list_end(&swap_list); e = list_next(e)) {

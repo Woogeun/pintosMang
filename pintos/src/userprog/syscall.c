@@ -19,7 +19,6 @@
 #include "devices/input.h"
 
 
-
 static void syscall_handler (struct intr_frame *);
 
 
@@ -28,7 +27,6 @@ syscall_init (void)
 {
 	lock_init(&filesys_lock);
 	lock_init(&free_lock);
-	lock_init(&validation_lock);
 	lock_init(&mmap_lock);
   	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
@@ -63,11 +61,11 @@ syscall_handler (struct intr_frame *f)
 }
 
 void halt() {
+
 	power_off();
 }
 
 void exit(int status) {
-
 	struct thread *curr = thread_current();
 
 	char *file_name = curr->name;
@@ -77,10 +75,14 @@ void exit(int status) {
 	if (filesys_lock.holder == curr)
 		lock_release(&filesys_lock);
 
+	lock_acquire(&free_lock);
+
   	free_mmap_list();
-  	free_child_list();
   	free_file_list();
   	free_page();
+  	free_child_list();
+
+  	lock_release(&free_lock);
 
   	awake_wait_thread(status);
 
@@ -96,19 +98,18 @@ void exit(int status) {
 
   	ASSERT(list_empty(&curr->child_list));
   	ASSERT(list_empty(&curr->file_list));
+  	ASSERT(list_empty(&curr->mmap_list));
+
 
 	thread_exit();
 }
 
 tid_t exec(const char *cmd_line, void *esp) {
-	lock_acquire(&filesys_lock);
 
 	if (!valid_address((void *) cmd_line, esp)) {
-		lock_release(&filesys_lock);
 		exit(-1);
 	}
 
-	lock_release(&filesys_lock);
 	tid_t tid = process_execute(cmd_line);
 	return tid;
 }
@@ -119,117 +120,95 @@ int wait(tid_t tid) {
 }
 
 bool create(const char *file, unsigned size, void *esp) {
-	lock_acquire(&filesys_lock);
 
 	if (!valid_address((void *) file, esp)) {
-		lock_release(&filesys_lock);
 		exit(-1);
 	}
 
 	if (strlen(file) == 0) {
-		lock_release(&filesys_lock);
 		exit(-1);
 	}
 
-	bool success = false;
-
-	if (file==NULL)	{
-		lock_release(&filesys_lock);
+	if (file == NULL)	{
 		exit(-1);
 	}
+
 	if (strlen(file) > 14) {
-		lock_release(&filesys_lock);
-		return false; 
+		return false;
 	}
-
-	lock_release(&filesys_lock);
 
 	lock_acquire(&filesys_lock);
-	success = filesys_create(file, size);
+	bool success = filesys_create(file, size);
 	lock_release(&filesys_lock);
 
 	return success;
 }
 
 bool remove(const char *file, void *esp) {
-	lock_acquire(&filesys_lock);
 
 	if (!valid_address((void *) file, esp)) {
-		lock_release(&filesys_lock);
 		exit(-1);
 	}
 
-	bool success;
-
-	lock_release(&filesys_lock);
-
 	lock_acquire(&filesys_lock);
-	success = filesys_remove(file);
+	bool success = filesys_remove(file);
 	lock_release(&filesys_lock);
 
 	return success;
 }
 
 int open(const char *file_name, void *esp) {
-	lock_acquire(&validation_lock);
 
 	if (!valid_address((void *) file_name, esp)) {
-		lock_release(&validation_lock);
 		exit(-1);
 	}
 
-	struct thread *curr = thread_current();
-	int fd = -1;
-	struct file *file;
-
-	lock_release(&validation_lock);
-
 	lock_acquire(&filesys_lock);
-	file = filesys_open(file_name);
+	struct file *file = filesys_open(file_name);
 	
+
 	if (file == NULL){
 		lock_release(&filesys_lock);
 		return -1;
 	}
 
 	struct file_info *f_info = create_file_info();
-	fd = get_fd();
+	int fd = get_fd();
 	
 	f_info->fd = fd;
 	f_info->file = file;
 	f_info->position = 0;
 	
-	list_insert_ordered(&curr->file_list, &f_info->elem, &cmp_fd, NULL);
-
+	list_insert_ordered(&thread_current()->file_list, &f_info->elem, &cmp_fd, NULL);
 	lock_release(&filesys_lock);
+
 	return fd;
 }
 
 int filesize(int fd) {
-	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL)
-		exit(-1);
-	int size = 0;
-	
 	lock_acquire(&filesys_lock);
-	size = file_length(f_info->file);
+
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		exit(-1);
+	}
+
+	int size = file_length(f_info->file);
 	lock_release(&filesys_lock);
 
 	return size;
 }
 
 int read(int fd, char *buffer, size_t size, void *esp) {
-	lock_acquire(&validation_lock);
 
 	char *tmp = pg_round_down(buffer);
 	while ((unsigned) tmp <= (unsigned) pg_round_down(buffer + size)) {
 		if (!valid_address((void *) tmp, esp)){
-			lock_release(&validation_lock);
 			exit(-1);
 		}
 		tmp += PGSIZE;
 	}
-	lock_release(&validation_lock);
 
 	//stdin
 	if (fd == 0) {
@@ -244,11 +223,14 @@ int read(int fd, char *buffer, size_t size, void *esp) {
 		exit(-1);
 
 	//ordinary file
-	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL) 
-		exit(-1);
-
 	lock_acquire(&filesys_lock);
+
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		exit(-1);
+	}
+	
 	size = file_read(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
 
@@ -256,17 +238,14 @@ int read(int fd, char *buffer, size_t size, void *esp) {
 }
 
 int write(int fd, const char *buffer, size_t size, void *esp) {
-	lock_acquire(&validation_lock);
 
 	char *tmp = pg_round_down(buffer);
 	while ((unsigned) tmp <= (unsigned) pg_round_down(buffer + size)) {
 		if (!valid_address((void *) tmp, esp)){
-			lock_release(&validation_lock);
 			exit(-1);
 		}
 		tmp += PGSIZE;
 	}
-	lock_release(&validation_lock);
 
 	//stdin
 	if (fd == 0)
@@ -281,11 +260,14 @@ int write(int fd, const char *buffer, size_t size, void *esp) {
 	}
 
 	//ordinary file
-	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL)
-		exit(-1);
-
 	lock_acquire(&filesys_lock);
+
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		exit(-1);
+	}
+	
 	size = file_write(f_info->file, buffer, size);
 	lock_release(&filesys_lock);
 
@@ -293,22 +275,28 @@ int write(int fd, const char *buffer, size_t size, void *esp) {
 }
 
 void seek(int fd, unsigned position) {
-	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL)
-		exit(-1);
-
 	lock_acquire(&filesys_lock);
+
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		exit(-1);
+	}
+	
 	file_seek(f_info->file, position);
 	lock_release(&filesys_lock);
 }
 
 unsigned tell(int fd) {
-	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL) 
-		exit(-1);
-	int pos = 0;
-
 	lock_acquire(&filesys_lock);
+
+	struct file_info *f_info = find_file_info_by_fd(fd);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		exit(-1);
+	}
+
+	int pos = 0;
 	pos = file_tell(f_info->file);
 	lock_release(&filesys_lock);
 
@@ -320,48 +308,49 @@ void close(int fd) {
 	if (fd == 0 || fd == 1) 
 		exit(-1);
 
+	lock_acquire(&filesys_lock);
 	struct file_info *f_info = find_file_info_by_fd(fd);
 
 	if (f_info != NULL) {
 
-		lock_acquire(&filesys_lock);
 		file_close(f_info->file);
-		lock_release(&filesys_lock);
-
 		list_remove(&f_info->elem);
 		free(f_info);
-	} else {
 
+		lock_release(&filesys_lock);
+	} else {
+		lock_release(&filesys_lock);
 		exit(-1);
 	}
 }
 
 int mmap(int fd, void *addr, void *esp UNUSED) {
 	// find open file with fd
+	lock_acquire(&filesys_lock);
+
 	struct file_info *f_info = find_file_info_by_fd(fd);
-	if (f_info == NULL) 
-		exit(-1);
+	if (f_info == NULL) {
+		lock_release(&filesys_lock);
+		return -1;
+	}
+	struct file *file = f_info->file;
+	lock_release(&filesys_lock);
 
 	unsigned size = filesize(fd);
 
 	// check address validation
-	lock_acquire(&validation_lock);
 
 	if (pg_ofs(addr) != 0) {
-		lock_release(&validation_lock);
 		return -1;
 	}
 
 	void *tmp = addr;
 	while ((unsigned) tmp <= (unsigned) pg_round_down(addr + size)) {
 		if (!valid_mmap_address(tmp)) {
-			lock_release(&validation_lock);
 			return -1;
 		}
 		tmp += PGSIZE;
 	}
-
-	lock_release(&validation_lock);
 
 	// find file size and find page_read_bytes and page_zero_bytes
 	uint32_t read_bytes, zero_bytes;
@@ -374,6 +363,7 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	ASSERT(pg_ofs((void *) (read_bytes + zero_bytes)) == 0);
 
 	// get new identical mapid
+	lock_acquire(&mmap_lock);
 	int mapid = get_mapid();
 
 	// page table add with ofs
@@ -382,13 +372,12 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	off_t ofs = 0;
 
 	while (read_bytes > 0 || zero_bytes > 0) {
-	    lock_acquire(&mmap_lock);
 
 	  	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 	  	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 	  	//swap out directly from disk to swap
-	    struct page *p = page_add_hash(upage, true, f_info->file, page_read_bytes, page_zero_bytes, ofs);
+	    struct page *p = page_add_hash(upage, true, file, page_read_bytes, page_zero_bytes, ofs);
 	    page_to_swap(p);
 
 	    //add to mmap list
@@ -402,9 +391,9 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	  	zero_bytes -= page_zero_bytes;
 	  	upage += PGSIZE;
 	    ofs += PGSIZE;
-	    
-	    lock_release(&mmap_lock);
   	}
+
+  	lock_release(&mmap_lock);
 
 	return mapid;
 }
@@ -414,8 +403,10 @@ void munmap(int mapid) {
 
 	//check mmap_list is not empty
 	struct list *mmap_list = &thread_current()->mmap_list;
-	if (list_empty(mmap_list))
+	if (list_empty(mmap_list)) {
+		lock_release(&mmap_lock);
 		return;
+	}
 
 	//unman all the mmap pages and remove from the mmap list
 	struct list_elem *e = list_begin(mmap_list);
@@ -473,18 +464,21 @@ bool valid_address(void *address, void *esp) {
 		return false;
 	}
 
-	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
-	if (p == NULL){
-		return page_grow_stack(esp, address);
-	}
+	bool valid = true;
 
-	if (p->position == ON_SWAP){
+	lock_acquire(&page_lock);
+	struct page *p = page_get_by_upage(thread_current(), pg_round_down(address));
+
+	if (p == NULL){
+		valid = page_grow_stack(esp, address);
+	} else if (p->position == ON_SWAP){
 		page_load_from_swap(p);
 	} else if (p->position == ON_DISK){
 		page_load_from_disk(p);
 	}
 
-	return true;
+	lock_release(&page_lock);
+	return valid;
 }
 
 bool is_child(struct thread *t, tid_t tid) {
@@ -499,12 +493,16 @@ bool valid_mmap_address(void *address) {
 	}
 
 	ASSERT(pg_ofs(address) == 0);
+
+	bool valid = true;
+	lock_acquire(&page_lock);
 	struct page *p = page_get_by_upage(thread_current(), address);
 	if (p != NULL) {
-		return false;
+		valid = false;
 	}
 
-	return true;
+	lock_release(&page_lock);
+	return valid;
 }
 
 
@@ -573,7 +571,6 @@ struct file_info *create_file_info() {
 }
 
 struct file_info *find_file_info_by_fd(int fd) {
-	lock_acquire(&filesys_lock);
 
 	struct thread *curr = thread_current();
 	struct list *file_list = &curr->file_list;
@@ -581,11 +578,10 @@ struct file_info *find_file_info_by_fd(int fd) {
 	for (e = list_begin(file_list); e != list_end(file_list); e = list_next(e)) {
 		struct file_info *f_info = list_entry(e, struct file_info, elem);
 		if (f_info->fd == fd) {
-			lock_release(&filesys_lock);
 			return f_info;
 		}
 	}
-	lock_release(&filesys_lock);
+
 	return NULL;
 }
 
@@ -617,24 +613,20 @@ bool cmp_fd(const struct list_elem *a, const struct list_elem *b, void *aux) {
 }
 
 void free_file_list() {
-	lock_acquire(&free_lock);
+	lock_acquire(&filesys_lock);
 
 	struct thread *curr = thread_current();
 	struct list *file_list = &curr->file_list;
-	
+
 	while(!list_empty(file_list)) {
 		struct list_elem *e = list_pop_front(file_list);
 		struct file_info *f_info = list_entry(e, struct file_info, elem);
 
-		lock_acquire(&filesys_lock);
 		file_close(f_info->file);
-		lock_release(&filesys_lock);
-
 		list_remove(&f_info->elem);
-		free(f_info);
 	}
 
-	lock_release(&free_lock);
+	lock_release(&filesys_lock);
 }
 
 
@@ -665,8 +657,7 @@ struct child_info *find_child_info_by_tid(struct thread *t, tid_t tid) {
 }
 
 void free_child_list() {
-	lock_acquire(&free_lock);
-
+	
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr->child_list;
 
@@ -677,11 +668,10 @@ void free_child_list() {
 		list_remove(&c_info->elem);
 		free(c_info);
 	}
-
-	lock_release(&free_lock);
 }
 
 void free_page() {
+
 	lock_acquire(&page_lock);
 
 	struct list_elem *e = list_begin(&frame_list);
@@ -695,6 +685,7 @@ void free_page() {
 	}
 
 	tid_t curr_tid = thread_current()->tid;
+
 	e = list_begin(&swap_list);
 	while (e != list_tail(&swap_list)) {
 		struct swap *s = list_entry(e, struct swap, elem);

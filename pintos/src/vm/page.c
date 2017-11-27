@@ -71,12 +71,10 @@ struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32
 }
 
 void page_remove_hash(struct page *p) {
-  lock_acquire(&page_lock);
 
 	hash_delete(&thread_current()->page_hash, &p->elem);
 	free(p);
 
-  lock_release(&page_lock);
 }
 
 struct page *page_get_by_upage(struct thread *t, void *upage) {
@@ -100,9 +98,11 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+  lock_acquire(&filesys_lock);
 	file_seek (file, ofs);
+  lock_release(&filesys_lock);
+
 	while (read_bytes > 0 || zero_bytes > 0) {
-    lock_acquire(&page_lock);
 
   	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
   	size_t page_zero_bytes = PGSIZE - page_read_bytes;
@@ -113,8 +113,6 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
   	zero_bytes -= page_zero_bytes;
   	upage += PGSIZE;
     ofs += PGSIZE;
-    
-    lock_release(&page_lock);
   }
 
 	return true;
@@ -122,14 +120,11 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
 
 bool page_setup_stack (void **esp, int argc, char **argv) 
 {
-  lock_acquire(&page_lock);
 
   if (!page_grow_stack(STACK_INITIAL_UPAGE, STACK_INITIAL_UPAGE)) {
     printf("<< page grow stack fail in lazy loading >>\n");
     return false;
   }
-
-  //lock_acquire(&page_lock);
   
   *esp = PHYS_BASE;
   int i;
@@ -175,7 +170,6 @@ bool page_setup_stack (void **esp, int argc, char **argv)
 
   free(addresses);
 
-  lock_release(&page_lock);
   return true;
 }
 
@@ -192,18 +186,15 @@ install_page (void *upage, void *kpage, bool writable)
 
 void page_fault_handler(void *esp, void *fault_addr, bool write, bool user UNUSED, bool not_present) {
 
-  struct thread *curr = thread_current();
-  struct page *p = page_get_by_upage(curr, pg_round_down(fault_addr));
-
   // invalid access detection
   if (!not_present){
-    if (!p->writable && write) {
-      exit(-1);
-    } 
     exit(-1);
   }
 
   // page fault handler
+  lock_acquire(&page_lock);
+  struct page *p = page_get_by_upage(thread_current(), pg_round_down(fault_addr));
+  lock_release(&page_lock);
   if (p != NULL) {
     ASSERT(p->position != ON_MEMORY);
     if (p->position == ON_SWAP) {                             // if page is on swap disk, alloc new page and link them together
@@ -229,33 +220,38 @@ static bool is_stack_growth(void *esp, void *fault_addr) {
 
 bool page_grow_stack(void *esp, void *fault_addr) {
 
-  bool lock_already = lock_held_by_current_thread(&page_lock);
-  if (!lock_already)
-    lock_acquire(&page_lock);
-
   bool success = false;
   
+  bool old_lock = lock_held_by_current_thread(&page_lock);
+  if (!old_lock)
+    lock_acquire(&page_lock);
+  
   if (is_stack_growth(esp, fault_addr)) {
+    
     struct frame *f = frame_get_page(PAL_USER, pg_round_down(fault_addr));
     if (!install_page(f->upage, f->kpage, true)) {
       PANIC("stack growth failure");
     }
     struct page *p = page_add_hash(f->upage, true, NULL, 0, 0, 0);
-    p->position = ON_MEMORY;
 
+    p->position = ON_MEMORY;
+    
     success = true;
   } else {
     success = false;
   }
 
-  if (!lock_already)
+  if (!old_lock)
     lock_release(&page_lock);
 
   return success;
 }
 
 void page_load_from_swap(struct page *p) {
-  lock_acquire(&page_lock);
+
+  bool old_lock = lock_held_by_current_thread(&page_lock);
+  if (!old_lock)
+    lock_acquire(&page_lock);
 
   ASSERT(p->position == ON_SWAP);
   struct frame *f = frame_get_page(PAL_USER, p->upage);
@@ -265,12 +261,16 @@ void page_load_from_swap(struct page *p) {
     PANIC("install fail!!! why??");
   
   p->position = ON_MEMORY;
-
-  lock_release(&page_lock);
+  
+  if (!old_lock)
+    lock_release(&page_lock);
 }
 
 void page_load_from_disk(struct page *p) {
-  lock_acquire(&page_lock);
+
+  bool old_lock = lock_held_by_current_thread(&page_lock);
+  if (!old_lock)
+    lock_acquire(&page_lock);
 
   ASSERT(p->position == ON_DISK);
   struct frame *f = frame_get_page(PAL_USER, p->upage);
@@ -278,10 +278,11 @@ void page_load_from_disk(struct page *p) {
 
   ASSERT(d_info->file != NULL);
   
+  lock_acquire(&filesys_lock);
   if (file_read_at (d_info->file, f->kpage, d_info->page_read_bytes, d_info->ofs) != (int) d_info->page_read_bytes) {
-    frame_free_page(f);
     PANIC("file read didn`t read all the bytes");
   }
+  lock_release(&filesys_lock);
   
   memset (f->kpage + d_info->page_read_bytes, 0, d_info->page_zero_bytes);
 
@@ -290,17 +291,20 @@ void page_load_from_disk(struct page *p) {
   }
 
   p->position = ON_MEMORY;
-
-  lock_release(&page_lock);
+  
+  if (!old_lock)
+    lock_release(&page_lock);
 }
 
 void page_to_swap(struct page *p) {
+
   page_load_from_disk(p);
+
+  lock_acquire(&page_lock);
 
   struct frame *f = frame_get_by_upage(p->upage);
   ASSERT(f != NULL);
 
-  lock_acquire(&frame_lock);
   swap_out(f);
   p->position = ON_SWAP;
   pagedir_clear_page(f->thread->pagedir, f->upage);
@@ -308,11 +312,10 @@ void page_to_swap(struct page *p) {
   list_remove(&f->elem);
   free(f);
 
-  lock_release(&frame_lock);
+  lock_release(&page_lock);
 }
 
 void page_to_disk(struct page *p) {
-  lock_acquire(&page_lock);
 
   struct disk_info *d_info = &p->d_info;
   struct file *file = d_info->file;
@@ -320,24 +323,25 @@ void page_to_disk(struct page *p) {
   off_t ofs = d_info->ofs;
 
   if (p->position == ON_SWAP) {
-    lock_release(&page_lock);
     page_load_from_swap(p);
-    lock_acquire(&page_lock);
   }
+
+  lock_acquire(&page_lock);
 
   ASSERT(p->position == ON_MEMORY);
   struct frame *f = frame_get_by_upage(p->upage);
   ASSERT(f != NULL);
 
-  lock_acquire(&filesys_lock);
-  if (pagedir_is_dirty(thread_current()->pagedir, p->upage))
+  if (pagedir_is_dirty(thread_current()->pagedir, p->upage)){
+    lock_acquire(&filesys_lock);  
     file_write_at(file, f->kpage, size, ofs);
-  lock_release(&filesys_lock);
-
-  lock_release(&page_lock);
+    lock_release(&filesys_lock);
+  }
 
   frame_free_page(f);
   page_remove_hash(p);
+
+  lock_release(&page_lock);
 }
 
 

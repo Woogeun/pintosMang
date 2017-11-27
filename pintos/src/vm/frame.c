@@ -9,15 +9,17 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 
-void frame_print_table(int count) {
+void frame_print(struct frame *f) {
+
+	printf("upage : 0x%8x, kpage : 0x%8x %s\n", (unsigned) f->upage, (unsigned) f->kpage, f->chance ? "chance" : "no chance");
+}
+
+void frame_print_table() {
 	struct list_elem *e;
-	int c = 0;
 	printf("===================== frame list ==================\n");
 	for (e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)) {
-		if (c ++ >= count)
-			break;
 		struct frame *f = list_entry(e, struct frame, elem);	
-		printf("upage : 0x%8x, kpage : 0x%8x\n", (unsigned) f->upage, (unsigned) f->kpage);
+		frame_print(f);
 
 	}
 	printf("====================================================\n");
@@ -31,8 +33,6 @@ void frame_init(void) {
 
 // frame_get_page : alloc new page (not link with kpage and upage). 
 struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
-
-	lock_acquire(&frame_lock);
 
 	// try alloc page. NULL if no free page
 	void *kpage = palloc_get_page(flags);
@@ -71,16 +71,13 @@ struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 	f->thread = thread_current();
 	f->kpage = kpage;
 	f->upage = upage;
+	f->chance = true;
 	list_push_back(&frame_list, &f->elem);
-
-	lock_release(&frame_lock);
 
 	return f;
 }
 
 void frame_free_page(struct frame *f) {
-	
-	lock_acquire(&frame_lock);
 
 	ASSERT(f->thread != NULL);
 	ASSERT(f->thread->pagedir != NULL);
@@ -88,17 +85,35 @@ void frame_free_page(struct frame *f) {
 	palloc_free_page(f->kpage);
 	list_remove(&f->elem);
 	free(f);
-
-	lock_release(&frame_lock);
 }
 
 struct frame *frame_evict_page(void) {
+	// struct thread *curr = thread_current();
+	// struct list_elem *e = list_begin(&frame_list);
+	// while (true) {
+	// 	struct frame *f = list_entry(e, struct frame, elem);
+	// 	//frame_print(f);
+	// 	if (!f->chance) {
+	// 		//if (f->thread != curr)
+	// 			return f;
+	// 	} else {
+	// 		f->chance = false;
+	// 	}
+
+	// 	if (e == list_rbegin(&frame_list)) {
+	// 		e = list_begin(&frame_list);
+	// 	}
+	// 	else {
+	// 		e = list_next(e);
+	// 	}
+	// }
+	// PANIC("Should not be reached");
+
 	struct list_elem *e = list_begin(&frame_list);
 	return list_entry(e, struct frame, elem);
 }
 
 struct frame *frame_get_by_upage(void *upage) {
-	lock_acquire(&frame_lock);
 
 	struct thread *curr = thread_current();
 	struct list_elem *e = list_begin(&frame_list);
@@ -106,12 +121,10 @@ struct frame *frame_get_by_upage(void *upage) {
 		struct frame *f = list_entry(e, struct frame, elem);
 		if (f->thread == curr)
 			if (f->upage == upage) {
-				lock_release(&frame_lock);
 				return f;
 			}
 	}
 	
-	lock_release(&frame_lock);
 	return NULL;
 }
 
