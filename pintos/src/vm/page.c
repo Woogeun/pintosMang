@@ -52,7 +52,7 @@ void page_init(void) {
 	lock_init(&page_lock);
 }
 
-struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32_t page_read_bytes, uint32_t page_zero_bytes, off_t ofs) {
+struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32_t page_read_bytes, uint32_t page_zero_bytes, off_t ofs, int mapid) {
 
 	struct page *p = (struct page *) malloc (sizeof(struct page));
 	p->upage = upage;
@@ -64,6 +64,7 @@ struct page *page_add_hash(void *upage, bool writable, struct file *file, uint32
   d_info->page_read_bytes = page_read_bytes;
   d_info->page_zero_bytes = page_zero_bytes;
   d_info->ofs = ofs;
+  d_info->mapid = mapid;
 
 	hash_insert(&thread_current()->page_hash, &p->elem);
 
@@ -110,7 +111,7 @@ bool page_load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t re
   	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
   	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-    page_add_hash(upage, writable, file, page_read_bytes, page_zero_bytes, ofs);
+    page_add_hash(upage, writable, file, page_read_bytes, page_zero_bytes, ofs, -1);
 
   	read_bytes -= page_read_bytes;
   	zero_bytes -= page_zero_bytes;
@@ -249,7 +250,7 @@ bool page_grow_stack(void *esp, void *fault_addr) {
     if (!install_page(f->upage, f->kpage, true)) {
       PANIC("stack growth failure");
     }
-    struct page *p = page_add_hash(f->upage, true, NULL, 0, 0, 0);
+    struct page *p = page_add_hash(f->upage, true, NULL, 0, 0, 0, -1);
     p->position = ON_MEMORY;
 
     success = true;
@@ -303,7 +304,10 @@ void page_load_from_disk(struct page *p) {
   lock_release(&page_lock);
 }
 
-
+void page_to_swap(struct page *p) {
+  page_load_from_disk(p);
+  //struct frame *f = frame_get_by_upage(p->upage);
+}
 
 
 

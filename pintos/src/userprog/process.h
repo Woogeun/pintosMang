@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 
+
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
@@ -45,6 +46,11 @@ struct child_info {
     struct list_elem elem;
     bool is_exit;
     int status;
+};
+
+struct mmap_info {
+	int mapid;
+	struct list_elem elem;
 };
 
 #endif /* userprog/process.h */

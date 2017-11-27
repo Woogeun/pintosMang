@@ -8,7 +8,6 @@
 
 void syscall_init (void);
 
-
 //syscall helper function
 void        halt(void);						
 void        exit(int);						
@@ -23,20 +22,23 @@ int         write(int, const char *, size_t, void *);
 void        seek(int, unsigned);				
 unsigned    tell(int);						
 void        close(int);		
-int 		mmap(int, void *);
+int 		mmap(int, void *, void *);
 void 		munmap(int);				
 
 
 //shared data
 struct lock filesys_lock;
 struct lock free_lock;
+struct lock validation_lock;
+struct lock mmap_lock;
 
 //My Implementation
 int return_args(struct intr_frame *, int);
 
 //about validation
-bool valid_address(const void *, void *);
+bool valid_address(void *, void *);
 bool is_child(struct thread *, tid_t);
+bool valid_mmap_address(void *);
 
 //about wait_info structure
 struct 	wait_info *create_wait_info(void);
@@ -48,7 +50,7 @@ void 	free_thread_list(void);
 //about file_info structure
 struct 	file_info *create_file_info(void);
 struct 	file_info *find_file_info_by_fd(int);
-int 	get_fd(struct list *);
+int 	get_fd(void);
 bool 	cmp_fd(const struct list_elem *, const struct list_elem *, void *);
 void 	free_file_list(void);
 
@@ -59,5 +61,10 @@ void 	free_child_list(void);
 
 //about page allocation
 void free_page(void);
+
+//about mmap structure
+struct mmap_info *create_mmap_info(void);
+int get_mapid(void);
+bool cmp_mapid(const struct list_elem *, const struct list_elem *, void *);
 
 #endif /* userprog/syscall.h */

@@ -12,6 +12,7 @@
 #define UPAGE_BOTTOM 0x08048000
 #define STACK_MAX_SIZE 8000000
 
+
 struct lock page_lock;
 
 struct disk_info {
@@ -19,6 +20,7 @@ struct disk_info {
 	uint32_t page_read_bytes;
 	uint32_t page_zero_bytes;
 	off_t ofs;
+	int mapid;
 };
 
 enum page_position {
@@ -39,7 +41,7 @@ struct page {
 
 void page_init(void);
 
-struct page *page_add_hash(void *, bool, struct file *, uint32_t, uint32_t, off_t);
+struct page *page_add_hash(void *, bool, struct file *, size_t, size_t, off_t, int);
 void page_remove_hash(void *);
 struct page *page_get_by_upage(struct thread *, void *);
 
@@ -52,6 +54,7 @@ void page_fault_handler(void *, void *, bool, bool, bool);
 bool page_grow_stack(void *,void *);
 void page_load_from_swap(struct page *);
 void page_load_from_disk(struct page *);
+void page_to_swap(struct page *);
 
 void page_print_table(void);
 void page_print(struct page *);

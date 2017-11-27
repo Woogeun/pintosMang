@@ -114,7 +114,8 @@ struct thread
     struct file *file;                  /* current thread file */
     struct thread *parent;              /* pointing parent thread */  
 
-    struct hash page_hash;             /* manage page table defined in "vm/page.h" */     
+    struct hash page_hash;              /* manage page table defined in "vm/page.h" */  
+    struct list mmap_list;              /* manage mmap information per each thread */
   };
 
 

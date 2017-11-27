@@ -82,7 +82,7 @@ void swap_in(struct frame *f) {
 	struct swap *s = swap_get_by_upage(f->thread, upage);
 
 	if (s == NULL)
-		PANIC("[%d] No such user page \"0x%8x\" in swap disk", f->thread->tid, (unsigned) f->upage);
+		PANIC("[%d] No such user page \"0x%8x\" in swap disk", f->thread->tid, (unsigned) upage);
 
 	int index;
 

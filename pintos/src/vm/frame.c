@@ -3,7 +3,9 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include <debug.h>
+#include <stdio.h>
 #include "vm/page.h"
 #include "vm/swap.h"
 
@@ -60,10 +62,10 @@ struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 	}
 
 	ASSERT(kpage != NULL);
-	
+
 	// add to frame list 
 	struct frame *f = (struct frame *) malloc (sizeof(struct frame));
-	if (f == -1)
+	if (f == NULL)
 		PANIC("malloc failure");
 
 	f->thread = thread_current();
@@ -93,26 +95,24 @@ void frame_free_page(struct frame *f) {
 struct frame *frame_evict_page(void) {
 	struct list_elem *e = list_begin(&frame_list);
 	return list_entry(e, struct frame, elem);
-	// for ( ; ; ) {
-	// 	struct frame *f = list_entry(e, struct frame, elem);
-
-	// 	if (pagedir_is_accessed(f->thread->pagedir, f->upage)) {
-	// 		pagedir_set_accessed(f->thread->pagedir, f->upage, false);
-	// 		if (pagedir_is_dirty(f->thread->pagedir, f->upage))
-	// 			pagedir_set_dirty(f->thread->pagedir, f->upage, false);
-	// 	}
-	// 	else
-	// 		return f;
-
-	// 	if (e == list_end(&frame_list)) {
-	// 		e = list_begin(&frame_list);
-	// 	}
-	// 	else 
-	// 		e = list_next(e);
-	// }
 }
 
+struct frame *frame_get_by_upage(void *upage) {
+	lock_acquire(&frame_lock);
 
+	struct thread *curr = thread_current();
+	struct list_elem *e = list_begin(&frame_list);
+	for (e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)) {
+		struct frame *f = list_entry(e, struct frame, elem);
+		if (f->thread == curr)
+			if (f->upage == upage) {
+				lock_release(&frame_lock);
+				return f;
+			}
+	}
+	lock_release(&frame_lock);
+	return NULL;
+}
 
 
 
