@@ -29,6 +29,7 @@ void frame_init(void) {
 
 	list_init(&frame_list);
 	lock_init(&frame_lock);
+	evict_turn = NULL;
 }
 
 // frame_get_page : alloc new page (not link with kpage and upage). 
@@ -37,6 +38,7 @@ struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 	// try alloc page. NULL if no free page
 	void *kpage = palloc_get_page(flags);
 
+	lock_acquire(&frame_lock);
 	if (kpage == NULL) {
 
 		// just find frame to be evicted
@@ -74,10 +76,14 @@ struct frame *frame_get_page(enum palloc_flags flags, void *upage) {
 	f->chance = true;
 	list_push_back(&frame_list, &f->elem);
 
+	lock_release(&frame_lock);
+
 	return f;
 }
 
 void frame_free_page(struct frame *f) {
+
+	lock_acquire(&frame_lock);
 
 	ASSERT(f->thread != NULL);
 	ASSERT(f->thread->pagedir != NULL);
@@ -85,35 +91,36 @@ void frame_free_page(struct frame *f) {
 	palloc_free_page(f->kpage);
 	list_remove(&f->elem);
 	free(f);
+
+	lock_release(&frame_lock);
 }
 
+// clock algorithm
 struct frame *frame_evict_page(void) {
-	// struct thread *curr = thread_current();
-	// struct list_elem *e = list_begin(&frame_list);
-	// while (true) {
-	// 	struct frame *f = list_entry(e, struct frame, elem);
-	// 	//frame_print(f);
-	// 	if (!f->chance) {
-	// 		//if (f->thread != curr)
-	// 			return f;
-	// 	} else {
-	// 		f->chance = false;
-	// 	}
+	
+	if (evict_turn == NULL)
+		evict_turn = list_begin(&frame_list);
+	while (true) {
+		struct frame *f = list_entry(evict_turn, struct frame, elem);
 
-	// 	if (e == list_rbegin(&frame_list)) {
-	// 		e = list_begin(&frame_list);
-	// 	}
-	// 	else {
-	// 		e = list_next(e);
-	// 	}
-	// }
-	// PANIC("Should not be reached");
+		if (evict_turn == list_rbegin(&frame_list)) {
+			evict_turn = list_begin(&frame_list);
+		}
+		else {
+			evict_turn = list_next(evict_turn);
+		}
 
-	struct list_elem *e = list_begin(&frame_list);
-	return list_entry(e, struct frame, elem);
+		if (!f->chance) {
+				return f;
+		} else {
+			f->chance = false;
+		}
+	}
 }
 
 struct frame *frame_get_by_upage(void *upage) {
+
+	lock_acquire(&frame_lock);
 
 	struct thread *curr = thread_current();
 	struct list_elem *e = list_begin(&frame_list);
@@ -121,9 +128,12 @@ struct frame *frame_get_by_upage(void *upage) {
 		struct frame *f = list_entry(e, struct frame, elem);
 		if (f->thread == curr)
 			if (f->upage == upage) {
+				lock_release(&frame_lock);
 				return f;
 			}
 	}
+
+	lock_release(&frame_lock);
 	
 	return NULL;
 }

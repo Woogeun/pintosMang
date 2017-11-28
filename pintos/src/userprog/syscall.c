@@ -371,6 +371,7 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	seek(fd, 0);
 	off_t ofs = 0;
 
+	lock_acquire(&page_lock);
 	while (read_bytes > 0 || zero_bytes > 0) {
 
 	  	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
@@ -392,6 +393,7 @@ int mmap(int fd, void *addr, void *esp UNUSED) {
 	  	upage += PGSIZE;
 	    ofs += PGSIZE;
   	}
+  	lock_release(&page_lock);
 
   	lock_release(&mmap_lock);
 
@@ -410,6 +412,8 @@ void munmap(int mapid) {
 
 	//unman all the mmap pages and remove from the mmap list
 	struct list_elem *e = list_begin(mmap_list);
+	lock_acquire(&page_lock);
+
 	while (e != list_tail(mmap_list)) {
 		struct mmap_info *m_info = list_entry(e, struct mmap_info, elem);
 		e = list_next(e);
@@ -418,6 +422,8 @@ void munmap(int mapid) {
 			list_remove(list_prev(e));
 		}
 	}
+
+	lock_release(&page_lock);
 
 	lock_release(&mmap_lock);
 }
@@ -684,6 +690,8 @@ void free_page() {
 		}
 	}
 
+	lock_release(&page_lock);
+
 	tid_t curr_tid = thread_current()->tid;
 
 	e = list_begin(&swap_list);
@@ -693,8 +701,6 @@ void free_page() {
 		if (s->tid == curr_tid)
 			swap_free(s);
 	}
-
-	lock_release(&page_lock);
 }
 
 
@@ -735,11 +741,14 @@ void free_mmap_list() {
 	lock_acquire(&mmap_lock);
 
 	struct list *mmap_list = &thread_current()->mmap_list;
+	lock_acquire(&page_lock);
+
 	while (!list_empty(mmap_list)) {
 		struct mmap_info *m_info = list_entry(list_pop_front(mmap_list), struct mmap_info, elem);
 		page_to_disk(m_info->page);
 	}
 
+	lock_release(&page_lock);
 	lock_release(&mmap_lock);
 }
 
