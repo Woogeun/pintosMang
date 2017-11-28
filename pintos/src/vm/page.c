@@ -281,7 +281,6 @@ void page_load_from_disk(struct page *p) {
 
 void page_to_swap(struct page *p) {
 
-  //lock_acquire(&page_lock);
   page_load_from_disk(p);
 
   struct frame *f = frame_get_by_upage(p->upage);
@@ -293,8 +292,6 @@ void page_to_swap(struct page *p) {
   palloc_free_page(f->kpage);
   list_remove(&f->elem);
   free(f);
-
-  //lock_release(&page_lock);
 }
 
 void page_to_disk(struct page *p) {
@@ -303,8 +300,6 @@ void page_to_disk(struct page *p) {
   struct file *file = d_info->file;
   size_t size = d_info->page_read_bytes;
   off_t ofs = d_info->ofs;
-
-  //lock_acquire(&page_lock);
 
   if (p->position == ON_SWAP) {
     page_load_from_swap(p);
@@ -322,8 +317,6 @@ void page_to_disk(struct page *p) {
 
   frame_free_page(f);
   page_remove_hash(p);
-
-  //lock_release(&page_lock);
 }
 
 

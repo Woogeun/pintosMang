@@ -14,27 +14,28 @@
 
 struct lock page_lock;
 
-// new structure in page.c
-
+// used when load the lazy loaded page and memory map file 
 struct disk_info {
-	struct file *file;
-	uint32_t page_read_bytes;
-	uint32_t page_zero_bytes;
-	off_t ofs;
+	struct file *file;					/* which file */
+	uint32_t page_read_bytes;			/* how many bytes to be written */
+	uint32_t page_zero_bytes;			/* how many bytes need not to be written */
+	off_t ofs;							/* offset of this file */
 };
 
+// used when classify that pages current position
 enum page_position {
-	ON_DISK,
-	ON_MEMORY,
-	ON_SWAP,
+	ON_DISK,							/* page is not loaded */
+	ON_MEMORY,							/* page is on memory */
+	ON_SWAP,							/* page is on swap disk */
 };
 
+// used when page fault occurs
 struct page {
-	void *upage;
-	bool writable;
-	enum page_position position;
-	struct disk_info d_info;
-	struct hash_elem elem;
+	void *upage;						/* virtual address of this page */
+	bool writable;						/* if true, write is allowed, otherwise r/o */
+	enum page_position position;		/* current position of this page */
+	struct disk_info d_info;			/* information of file to be referred. */
+	struct hash_elem elem;				/* element for hash management */
 };
 
 //init function

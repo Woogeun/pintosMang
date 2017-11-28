@@ -1,0 +1,318 @@
+			+---------------------------+
+			|	      CS 330			|
+			| PROJECT 3: VIRTUAL MEMORY	|
+			|	   DESIGN DOCUMENT		|
+			+---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Woogeun Bae <qodnrms@kaist.ac.kr>
+Bumki Kim <prorata@kaist.ac.kr>
+used_tokens = 2;
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			PAGE TABLE MANAGEMENT
+			=====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. thread.h
+struct thread {
+  	...
+    struct hash page_hash;              /* contains page table informationdefined in "vm/page.h" */  
+    struct list mmap_list;              /* contains mmap information per each thread */
+ };
+
+ 2. frame.h
+ // used when address the physical page allocate and free
+ struct frame {
+	struct thread *thread;			/* thread pointer of occupying this frame */
+	void *upage;					/* virtual page address */
+	void *kpage;					/* physical page address */
+	bool chance;					/* second chance information */
+	struct list_elem elem;			/* element for list management */
+};
+
+3. page.h
+// used when load the lazy loaded page and memory map file 
+struct disk_info {
+	struct file *file;					/* which file */
+	uint32_t page_read_bytes;			/* how many bytes to be written */
+	uint32_t page_zero_bytes;			/* how many bytes need not to be written */
+	off_t ofs;							/* offset of this file */
+};
+
+// used when classify that pages current position
+enum page_position {
+	ON_DISK,							/* page is not loaded */
+	ON_MEMORY,							/* page is on memory */
+	ON_SWAP,							/* page is on swap disk */
+};
+
+// used when page fault occurs
+struct page {
+	void *upage;						/* virtual address of this page */
+	bool writable;						/* if true, write is allowed, otherwise r/o */
+	enum page_position position;		/* current position of this page */
+	struct disk_info d_info;			/* information of file to be referred. */
+	struct hash_elem elem;				/* element for hash management */
+};
+
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for locating the frame,
+>> if any, that contains the data of a given page.
+
+ frame structure는 virtual, physical page 정보를 모두 가지고 있다. frame은 palloc_get_page 함수를 덮고 있으며, 최종적으로 palloc_get_page가 성공하여 physical page address 정보를 리턴하면 이 때 frame_list에 정보를 저장한다. 만약 첫 palloc_get_page가 실패 시, 현재 할당된 physical page들의 정보들을 frame_list에서 확인해 clock algorithm으로 eviction하기에 적합한 frame을 찾아낸다. 이 후 mapping된 physical, virtual page의 mapping을 끊기 위해 pagedir_clear_page 함수를 실행시키고, physical page를 palloc_free로 풀어준 뒤 frame_list에서 frame 정보를 제거한다. 이후 eviction이 끝나면 다시 palloc_get_page 함수를 실행시키며, 새로운 free frame이 생겨났기 때문에 새롭게 physical page를 할당할 수 있다. 
+
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+
+ accessed bit와 dirty bit control을 하지 않았다. 단지, mmap으로 할당된 page가 pagedir_is_dirty로 write이 실행됨을 확인 하고, 되었으면 file write, 그렇지 않으면 아무것도 하지 않을 때에 사용하였다.
+
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+ 우선 frame 할당을 원하는 경우는 stack growth, lazy loading, swap in, 그리고 immediate load(mmap) 일때 이다. 이 때 시작과 끝에 lock을 걸어 하나의 process만이 frame_list에 접근할 수 있게 설정하였고, frame_get_page나 frame_free_page 와 같이 frame_list를 독립적으로 변경하는 경우에는 두 함수 안의 frame_list의 접근과 수정 코드 부분을 감쌀 수 있도록 lock을 걸어주었다. 
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+		       PAGING TO AND FROM DISK
+		       =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. swap.h
+// used when allocate identical id to swap structure
+struct bitmap {
+	int count;						/* number of using swap pages */
+	int max;						/* number of max usable swap pages */
+	int *used_map;					/* int array. if k is used, k indexed set 1, otherwise 0. */
+};
+
+// used when manage stored and un-stored swap disk
+struct swap {
+	int id;							/* id is equal to index of bitmap */
+	tid_t tid;						/* owner thread pointer of this swap page */
+	void *upage;					/* virtual page address */
+	disk_sector_t sec_nos[8];		/* sector informations of this swap structure */
+	struct list_elem elem;			/* element for list management */
+};
+
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+ clock algorithm을 사용하였다. clock algorithm은 frame이 할당되어 list에 추가될 때 한번의 기회가 page에게 주어지며, eviction으로 처음 지목되었을 때 기 기회를 뺏는 역할을 한다. 이후 기회를 뺏긴 상태에서 다음 번 지목 됐을 때 eviction이 된다. frame의 member 변수 중 chance가 그 역할을 담당하며, 초깃값은 true, true일 때 eviction이 지목되면 false, false일때 eviction으로 지목되면 swap out을 시행한다.
+
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+ P가 Q가 사용하던 frame을 사용하게 되는, 즉, Q의 frame이 eviction되어 swap table로 들어가게 된 후 P가 할당한 frame이 Q의 frame과 같은 경우를 말한다. process마다 page는 사라지지 않고 관리된다. struct page의 position이 frame 할당을 받았는지, 아직 받지 않아 lazy loading 전인지, swap disk에 존재하는 지에 대한 정보를 담고있다. 위의 경우 Q의 frame이 eviction 될 때, 해당 Q의 page의 position 이 ON_SWAP 상태로 바뀌며, 다음에 Q에서 이 page의 접근을 원할 경우 B2의 알고리즘 처럼 다른 frame을 eviction하고 이 page에게 할당하여 주며 position 또한 ON_MEMORY 상태로 업데이트 해준다.
+
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+ stack growth를 원할 경우 fault된 address와 현재 stack pointer의 사이 값은 어떤 관계를 이룬다. 보통의 경우 fault된 address가 stack pointer보다 크다(fault_addr >= esp). 하지만 PUSHA의 instruction의 경우 4bytes 부터 32bytes 까지 push가 가능하며, 단순히 c code로 push할 때랑은 경우가 다르다. PUSHA instruction은 현재 stack page의 바닥에서 stack을 덮어 씌워 push한다. 이 경우 stack pointer보다 최대 32bytes까지 작게 나오므로 다음의 조건이 추가된다(fault_addr + 32 >= esp). 마지막으로, 이 fault_addr은 user address이어야 하고(is_user_addr(fault_addr)), max stack size인 8M를 넘지 말아야 한다(fault_addr - esp < 8M). 
+
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+ 모든 lock이 존재하는 function들과 그 순서이다. function을 차례대로 보면서 deadlock이 걸리지 않음을 보이려 한다. 
+
+ 1. page_load_segment :
+ 	No lock
+
+ 2. page_setup_stack :
+ 	+lock1
+ 	page_grow_stack(4)
+ 	-lock1
+
+ 3. page_fault_handler :
+ 	+lock1
+ 	page_grow_stack(4) || page_load_from_swap(5) || page_load_from_disk(8)
+ 	-lock1
+
+ 4. page_grow_stack :
+ 	frame_get_page(9)
+
+ 5. page_load_from_swap :
+ 	frame_get_page(9)
+ 	swap_in(14)
+
+ 6. page_load_from_disk : 
+ 	frame_get_page(9)
+
+ 7. page_to_swap :
+ 	frame_get_by_upage(12)
+ 	swap_out(13)
+ 	page_load_from_disk(6)
+
+ 8. page_to_disk :
+ 	page_load_from_swap(5)
+ 	frame_get_by_upage(12)
+ 	frame_free_page(10)
+
+ 9. frame_get_page :
+ 	+lock2
+ 	frame_evict_page(11)
+ 	-lock2
+
+ 10. frame_free_page :
+ 	+lock2
+ 	swap_out(13)
+ 	-lock2
+
+ 11. frame_evict_page :
+ 	No lock
+
+ 12. frame_get_by_upage :
+ 	+lock2
+ 	-lock2
+
+ 13. swap_out :
+ 	+lock3
+ 	-lock3
+
+ 14. swap_in :
+ 	+lock3
+ 	-lock3
+
+ (1) lock을 acquire하고 바로 release하는 경우는 deadlock이 발생하지 않는다. 따라서 1, 11, 12, 13, 14는 deadlock을 발생시키지 않는다. 즉, 이 function들은 locking에 영향을 주지 않는디.
+ 	->1, 11, 12, 13, 14
+ (2) deadlock이 없는 lock만 존재하는 function은 deadlock이 발생하지 않는다. +lockA +lockB -lockB -lockA 구조는 따라서 9, 10은 deadlock을 발생시키지 않는다.
+ 	->1, 9, 10, 11, 12, 13, 14
+ (3) (2)를 반복하면
+ 	->1, 4, 5, 6, 9, 10, 11, 12, 13, 14
+ 	->1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+ 	->1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+ (4) 즉 모든 function 이 deadlock을 일으키지 않는 lock 구조를 가지고 있다.
+
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+ 두 가지 경우가 존재한다. P가 eviction을 하는 도중인데 (1) 아직 palloc_free 함수가 실행되기 전일 경우 Q는 해당 page에 접근하여 physical page에 접근할 수 있다. (2) palloc_free 함수가 실행된 후 일경우 해당 frame이 존재하지 않으므로 Q는 page_fault가 발생한다. 이후 가장 먼저 도달하게 되는 page_fault_handler는 eviction을 진행중인 lock과 같은 lock이 걸리게 된다. P의 eviction이 모두 끝나면 접근하려던 page는 position이 ON_SWAP으로 바뀌게 되고 lock을 푼다. Q는 현재 palloc_free되어 frame이 없지만 page table에 존재하는 경우에 대하여 page_load_from_swap을 실행하게 된다. P의 eviction이 모두 끝난 이후에 Q의 page fault handling이 가능하므로 synchronization 이 보장된다.
+
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+
+ file system이나 swap disk에서 read해오는 경우는 lazy loading(page_load_from_disk)와 swap in(page_load_from_swap) 두 가지 경우가 존재한다. 두 함수 모두 처음부터 file read 하고 마지막까지 lock이 걸려 있어 P가 file read 중이고 lock이 아직 걸린 상태에서 Q가 eviction을 할 경우 Q는 반드시 같은 lock(frame_list에 접근하는 모든 함수에는 같은 lock이 걸려있다)을 얻어야 한다. 하지만 아직 lock이 걸려있으므로 Q는 기다리게 되고, P가 모두 load를 완료하여 lock release를 하면 이후부터 Q가 eviction을 하기 때문에 file read중인 page는 read를 모두 마친 상태에서 eviction이 일어난다. 
+
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+
+ 후자인 locking frame을 사용하였다. system call 이 일어나면 가장 먼저 address에 대하여 validation을 체크한다. 이 때, address가 kernel address이거나 0x08048000 아래인 경우는 invalid로 처리한다. 이후의 page 접근 함수들의 synchronization을 위해 page fault가 일어났을 때에 같은 lock을 건다. allocatable address에 대하여 해당 address의 page address를 찾아 (1) 존재하지 않을 경우 stack growth인지 확인 후, 맞다면 stack growth를 실행하고 true를 리턴하며 아닐 경우 invalid address로 간주하여 false를 리턴한다. (2) page가 존재할 경우 이 page의 position(ON_DISK, ON_MEMORY, ON_SWAP)에 따라 disk에서 file을 읽거나, swap disk에서 memory에 복사하여 true를 return한다. 
+ mmap의 경우는 조금 차이가 있다. user address인지 확인 후, 이 page가 이미 page hash에 존재할 경우 이 mmap은 다른 mmap의 영역을 침범하고 있으므로 false를 return한다. 
+
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+
+
+			 MEMORY MAPPED FILES
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+1. process.h
+struct mmap_info {
+	int mapid;					/* stores identical mapid */
+	struct page *page;			/* stores virtual page address of this process */
+	struct list_elem elem;		/* element for list management */
+};
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+ 일반적은 page들은 load_segment에서 page table에 참조해야 할 file들을 저장하고, 다음번에 지목되어 page fault가 일어났을 때 그제서야 file에서 정보를 읽어와 memory에 load한다. 하지만 mapped page는 file 정보를 바로 읽어 memory에 올리고, eviction 알고리즘을 거치지 않은 상태로 바로 swap disk에 write하여 lazy loading을 준비한다. 이후에는 모든 page들이 같은 방식으로 allocate, eviction되며, munmap이 불렸을 때가 되어서야 file write를 시행한다. thread마다 mmap한 page들을 list의 형태로 가지고 있는데, 모든 struct mmap_info에 대하여 memory에 있으면 바로 free하고, swap disk에 있으면 memory로 강제로 올려 free한다. 이 때, written page는 pagedir_is_dirty로 확인하여 true이면 page의 disk_info를 통해 file_write_at으로 실제 file에 적는다.
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+ mmap은 무한한 크기만큼 할당되는 것이 아닌 file의 size의 PGSIZE upper bound까지 할당된다. 따라서 이미 할당 되어 있는 page를 다른 mmap에서 다시 할당하려 할 경우 -1을 return하는 validation function을 추가하였다.
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+ 많은 implementation을 공유하였다. mmap은 load 될 때와, munmap될 때 두 가지 경우를 제외하면 executable의 page management와 다르지 않다. mmap과 executable은 page_load_from_swap, page_stack_growth 즉, 모든 page_fault_handler의 메커니즘을 공유한다. 다른 점은, mmap은 처음 load해올 때, 바로 swap disk에 저장하여 lazy loading을 하므로, page_to_swap을 구현해 page와 file 정보를 page table에 추가하고, 바로 page_load_from_disk를 통해 즉시 할당한다. 이후 할당된 page는 다시 swap_out을 통해 swap disk로 이동한다. 그리고 또 다른 점으로, munmap할 때, page_to_disk로 mmap 정보들을 file_write를 통해 실제 file에 써주고, page table에서 mmap정보를 제거하여 준다. 처음과 끝은 다르지만, mmap에서만 쓰이는 page_to_swap은 page_add_hash, page_load_from_disk, swap_out을 합쳐 놓은 하나의 함수이고, page_to_disk는 page_load_from_swap, page_remove_hash 을 합쳐놓은 함수이다. 즉, 거의 모든 코드를 공유하여 가독성과 modularity를 증가시켰다. 
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

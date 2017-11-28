@@ -13,11 +13,11 @@ struct list_elem *evict_turn;
 
 //new structure in frame.c
 struct frame {
-	struct thread *thread;
-	void *upage;
-	void *kpage;
-	bool chance;
-	struct list_elem elem;
+	struct thread *thread;			/* thread pointer of occupying frame */
+	void *upage;					/* viftual page address */
+	void *kpage;					/* physical page address */
+	bool chance;					/* second chance information */
+	struct list_elem elem;			/* element for list management */
 };
 
 //init function

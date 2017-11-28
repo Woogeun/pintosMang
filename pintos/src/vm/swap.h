@@ -12,17 +12,17 @@ struct list swap_list;
 
 //new structure in swap.c
 struct bitmap {
-	int count;
-	int max;
-	int *used_map;
+	int count;						/* number of using swap pages */
+	int max;						/* number of max usable swap pages */
+	int *used_map;					/* int array. if k is used, k indexed set 1, otherwise 0. */
 };
 
 struct swap {
-	int id;
-	tid_t tid;
-	void *upage;
-	disk_sector_t sec_nos[8];
-	struct list_elem elem;
+	int id;							/* id is equal to index of bitmap */
+	tid_t tid;						/* owner thread pointer of this swap page */
+	void *upage;					/* virtual page address */
+	disk_sector_t sec_nos[8];		/* sector informations of this swap structure */
+	struct list_elem elem;			/* element for list management */
 };
 
 //init function
