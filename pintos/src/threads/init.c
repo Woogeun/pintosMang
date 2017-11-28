@@ -29,11 +29,21 @@
 #else
 #include "tests/threads/tests.h"
 #endif
+#ifdef VM
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
+#endif
 #ifdef FILESYS
 #include "devices/disk.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+/*
+#ifdef VM
+#include "vm/frame.h"
+#endif
+*/
 
 /* Amount of physical memory, in 4 kB pages. */
 size_t ram_pages;
@@ -115,6 +125,12 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+#ifdef VM
+  frame_init();
+  page_init();
+  swap_init();
+#endif
+
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
@@ -123,6 +139,8 @@ main (void)
   /* Finish up. */
   if (power_off_when_done)
     power_off ();
+  free_wait_list();
+  free_thread_list();
   thread_exit ();
 }
 

@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -80,6 +81,14 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+
+struct list thread_all_list;
+struct thread_info {
+  struct thread *thread;
+  tid_t tid;
+  struct list_elem elem;
+};
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -88,14 +97,6 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int priority_origin;
-
-    int64_t sleep_start_ticks;
-    int64_t sleep_ticks;
-    int64_t sleep_end_ticks;
-    
-    struct lock* lock_waiting;
-    struct list lock_having;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -107,7 +108,16 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    struct list file_list;              /* list of file_info */
+    struct list child_list;             /* list of child_info */
+    struct file *file;                  /* current thread file */
+    struct thread *parent;              /* pointing parent thread */  
+
+    struct hash page_hash;              /* manage page table defined in "vm/page.h" */  
+    struct list mmap_list;              /* manage mmap information per each thread */
   };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -136,17 +146,13 @@ void thread_yield (void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
-int thread_get_priroity_eff (void);
-void thread_set_priority_eff (int);
-
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-bool cmp_timeticks(const struct list_elem*, const struct list_elem*, void *);
-bool cmp_priority(const struct list_elem*, const struct list_elem*, void *);
-void print_thread(const struct thread*);
-void print_waiting_list(const struct list*);
+void remove_thread(tid_t tid);
+struct thread *get_thread_by_tid(tid_t tid);
+struct thread *get_parent_by_tid(tid_t tid);
 
 #endif /* threads/thread.h */
