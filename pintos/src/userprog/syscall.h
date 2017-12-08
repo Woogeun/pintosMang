@@ -23,7 +23,12 @@ void        seek(int, unsigned);
 unsigned    tell(int);						
 void        close(int);		
 int 		mmap(int, void *, void *);
-void 		munmap(int);				
+void 		munmap(int);	
+bool		chdir(const char *, void *);
+bool		mkdir(const char *, void *);
+bool		readdir(int, char *, void *);
+bool		isdir(int);
+int			inumber(int);	
 
 
 //shared data

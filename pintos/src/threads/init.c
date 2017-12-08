@@ -38,6 +38,7 @@
 #include "devices/disk.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/cache.h"
 #endif
 /*
 #ifdef VM
@@ -121,8 +122,10 @@ main (void)
 
 #ifdef FILESYS
   /* Initialize file system. */
+  cache_init();
   disk_init ();
   filesys_init (format_filesys);
+  
 #endif
 
 #ifdef VM
@@ -139,9 +142,6 @@ main (void)
   /* Finish up. */
   if (power_off_when_done)
     power_off ();
-  free_wait_list();
-  free_thread_list();
-  thread_exit ();
 }
 
 /* Clear BSS and obtain RAM size from loader. */
@@ -386,6 +386,11 @@ power_off (void)
 #ifdef FILESYS
   filesys_done ();
 #endif
+
+#ifdef USERPROG
+  free_wait_list();
+  free_thread_list();
+#endif USERPROG
 
   print_stats ();
 

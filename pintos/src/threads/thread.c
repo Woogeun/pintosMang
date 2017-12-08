@@ -448,18 +448,21 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
+  list_init(&t->child_list);
+  list_init(&t->file_list);
+  list_init(&t->mmap_list);
+  
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  list_init(&t->child_list);
-  list_init(&t->file_list);
+  
   t->file = NULL;
   t->parent = NULL;
 
-  list_init(&t->mmap_list);
+  
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -598,16 +601,15 @@ struct thread *get_thread_by_tid(tid_t tid) {
 }
 
 struct thread *get_parent_by_tid(tid_t tid) {
-  //printf("<<1>>\n");
+  
   struct list_elem *e;
   for (e = list_begin(&thread_all_list); e != list_end(&thread_all_list); e = list_next(e)) {
     struct thread_info *t_info = list_entry(e, struct thread_info, elem);
     if (is_child(t_info->thread, tid)) {
-     // printf("<<2>>\n");
       return t_info->thread;
     }
   }
-  //printf("<<3>>\n");
+
   return NULL;
 }
 

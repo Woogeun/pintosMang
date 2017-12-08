@@ -4,8 +4,10 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/disk.h"
+#include "threads/synch.h"
 
 struct bitmap;
+struct lock inode_lock;
 
 void inode_init (void);
 bool inode_create (disk_sector_t, off_t);

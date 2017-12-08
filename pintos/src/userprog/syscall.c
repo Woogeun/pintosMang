@@ -54,9 +54,12 @@ syscall_handler (struct intr_frame *f)
   	case SYS_CLOSE:		close(arg1); 										break;
   	case SYS_MMAP:		f->eax = mmap(arg1, (void *) arg2, f->esp);			break;
   	case SYS_MUNMAP:	munmap(arg1);										break;
+  	case SYS_CHDIR:		f->eax = chdir((char *) arg1, f->esp);				break;
+  	case SYS_MKDIR:		f->eax = mkdir((char *) arg1, f->esp);				break;
+  	case SYS_READDIR:	f->eax = readdir(arg1, (char *) arg2, f->esp); 		break;
+  	case SYS_ISDIR:		f->eax = isdir(arg1);								break;
+  	case SYS_INUMBER:	f->eax = inumber(arg1);								break;
   	default:																break;
-  	
-
   }
 }
 
@@ -428,11 +431,22 @@ void munmap(int mapid) {
 	lock_release(&mmap_lock);
 }
 
-
-
-
-
-
+bool chdir(const char *dir UNUSED, void *esp UNUSED){
+	return false;
+}
+bool mkdir(const char *dir UNUSED, void *esp UNUSED){
+	return false;
+}
+bool readdir(int fd UNUSED, char* name UNUSED, void *esp UNUSED){
+	return false;
+}
+bool isdir(int fd UNUSED){
+	return false;
+}
+int inumber(int fd UNUSED){
+	int inumber = 0;
+	return inumber;
+}
 
 
 

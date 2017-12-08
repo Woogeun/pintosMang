@@ -9,7 +9,7 @@
 
 struct list frame_list;
 struct lock frame_lock;
-struct list_elem *evict_turn;
+struct list_elem *evict_turn_frame;
 
 //new structure in frame.c
 struct frame {

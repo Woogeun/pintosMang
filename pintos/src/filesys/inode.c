@@ -6,6 +6,12 @@
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "threads/palloc.h"
+#include "filesys/cache.h"
+#include "userprog/syscall.h"
+#include "userprog/process.h"
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
@@ -202,7 +208,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
-  uint8_t *bounce = NULL;
 
   while (size > 0) 
     {
@@ -220,31 +225,37 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (chunk_size <= 0)
         break;
 
+      // check whethere the sector is cached or not
+      lock_acquire(&cache_lock);
+      struct buffer *temp = cache_find_buffer(sector_idx);
+      
+      // if not cached, disk read to cache buffer
+      if(temp == NULL){
+        temp = cache_add_buffer(sector_idx);  
+        disk_read (filesys_disk, sector_idx, temp->data);
+      }
+      lock_release(&cache_lock);
+
       if (sector_ofs == 0 && chunk_size == DISK_SECTOR_SIZE) 
         {
           /* Read full sector directly into caller's buffer. */
-          disk_read (filesys_disk, sector_idx, buffer + bytes_read); 
+          memcpy(buffer + bytes_read, temp->data, DISK_SECTOR_SIZE);
         }
       else 
         {
-          /* Read sector into bounce buffer, then partially copy
-             into caller's buffer. */
-          if (bounce == NULL) 
-            {
-              bounce = malloc (DISK_SECTOR_SIZE);
-              if (bounce == NULL)
-                break;
-            }
-          disk_read (filesys_disk, sector_idx, bounce);
-          memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
+          memcpy(buffer + bytes_read, temp->data + sector_ofs, chunk_size);
         }
-      
+
+      temp->chance = true;
+
+      //lock_release(&cache_lock);
+        
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
       bytes_read += chunk_size;
     }
-  free (bounce);
+  
   return bytes_read;
 }
 
@@ -257,9 +268,9 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
+  
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
-  uint8_t *bounce = NULL;
 
   if (inode->deny_write_cnt)
     return 0;
@@ -279,31 +290,38 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
-
-      if (sector_ofs == 0 && chunk_size == DISK_SECTOR_SIZE) 
-        {
-          /* Write full sector directly to disk. */
-          disk_write (filesys_disk, sector_idx, buffer + bytes_written); 
-        }
       else 
         {
-          /* We need a bounce buffer. */
-          if (bounce == NULL) 
-            {
-              bounce = malloc (DISK_SECTOR_SIZE);
-              if (bounce == NULL)
-                break;
-            }
 
           /* If the sector contains data before or after the chunk
              we're writing, then we need to read in the sector
              first.  Otherwise we start with a sector of all zeros. */
-          if (sector_ofs > 0 || chunk_size < sector_left) 
-            disk_read (filesys_disk, sector_idx, bounce);
-          else
-            memset (bounce, 0, DISK_SECTOR_SIZE);
-          memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          disk_write (filesys_disk, sector_idx, bounce); 
+
+          // check whethere the sector is cached or not
+          lock_acquire(&cache_lock);
+          struct buffer *temp = cache_find_buffer(sector_idx);   
+
+          if (sector_ofs > 0 || chunk_size < sector_left) {             // case of partial write
+            if (temp == NULL) {
+              temp = cache_add_buffer(sector_idx);
+              disk_read (filesys_disk, sector_idx, temp->data);
+            }
+          }
+    
+          else {                                                       // case of whole write
+            if (temp == NULL) {
+              temp = cache_add_buffer(sector_idx);
+            }
+            memset(temp->data, 0, DISK_SECTOR_SIZE);
+          }
+
+          // copyt the data to cached buffer
+          memcpy (temp->data + sector_ofs, buffer + bytes_written, chunk_size);
+          temp->is_written = true;
+          temp->chance = true;
+          cache_write_increase();
+
+          lock_release(&cache_lock);
         }
 
       /* Advance. */
@@ -311,7 +329,6 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
-  free (bounce);
 
   return bytes_written;
 }

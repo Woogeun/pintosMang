@@ -29,7 +29,7 @@ void frame_init(void) {
 
 	list_init(&frame_list);
 	lock_init(&frame_lock);
-	evict_turn = NULL;
+	evict_turn_frame = NULL;
 }
 
 // frame_get_page : alloc new page (not link with kpage and upage). 
@@ -98,16 +98,16 @@ void frame_free_page(struct frame *f) {
 // clock algorithm
 struct frame *frame_evict_page(void) {
 	
-	if (evict_turn == NULL)
-		evict_turn = list_begin(&frame_list);
+	if (evict_turn_frame == NULL)
+		evict_turn_frame = list_begin(&frame_list);
 	while (true) {
-		struct frame *f = list_entry(evict_turn, struct frame, elem);
+		struct frame *f = list_entry(evict_turn_frame, struct frame, elem);
 
-		if (evict_turn == list_rbegin(&frame_list)) {
-			evict_turn = list_begin(&frame_list);
+		if (evict_turn_frame == list_rbegin(&frame_list)) {
+			evict_turn_frame = list_begin(&frame_list);
 		}
 		else {
-			evict_turn = list_next(evict_turn);
+			evict_turn_frame = list_next(evict_turn_frame);
 		}
 
 		if (!f->chance) {
